@@ -1,0 +1,1076 @@
+'use client';
+
+import React, { useState } from 'react';
+import {
+  Search,
+  Plus,
+  Printer,
+  Sparkles,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Wrench,
+  AlertTriangle,
+  Trash2,
+  CheckCircle,
+  FileText,
+  Clock,
+  X,
+  LayoutGrid,
+  List as ListIcon,
+  ArrowUpDown,
+  History,
+  UserCheck,
+  RotateCcw,
+  Edit3,
+  MapPin,
+  Tag,
+  Info,
+  Check,
+  Table as TableIcon,
+  ClipboardCheck,
+} from 'lucide-react';
+import { Book, BookItem, BookStatus, CategoryId, Language, ShelfLocationItem, Category } from '@/types';
+import { CATEGORIES } from '@/lib/constants';
+import { libraryStore } from '@/lib/storage';
+import { soundFx } from '@/lib/sound';
+import { DICTIONARY } from '@/lib/i18n';
+import { PageHeader } from '@/components/common/PageHeader';
+import { SmartBookCover } from '@/components/common/SmartBookCover';
+import { EditBookModal } from './EditBookModal';
+import { ShelfManagementModal } from '@/components/shelves/ShelfManagementModal';
+import { CategoryManagementModal } from '@/components/categories/CategoryManagementModal';
+import { StockOpnameModal } from '@/components/stockopname/StockOpnameModal';
+import { ActivityLogModal } from '@/components/audit/ActivityLogModal';
+
+interface BookManagementProps {
+  onOpenScanIsbn: () => void;
+  onOpenLabelPrinter: (barcodes: string[]) => void;
+  language?: Language;
+}
+
+export const BookManagement: React.FC<BookManagementProps> = ({
+  onOpenScanIsbn,
+  onOpenLabelPrinter,
+  language = 'id',
+}) => {
+  const t = DICTIONARY[language] || DICTIONARY.id;
+
+  const [search, setSearch] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'ALL'>('ALL');
+  const [labelFilter, setLabelFilter] = useState<'ALL' | 'UNPRINTED' | 'PRINTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'BORROWED' | 'DAMAGED' | 'LOST' | 'DISPOSED'>('ALL');
+  const [sortBy, setSortBy] = useState<'TITLE' | 'NEWEST' | 'COPIES'>('NEWEST');
+  const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE' | 'GRID'>('CARDS');
+  const [selectedBookForCopies, setSelectedBookForCopies] = useState<Book | null>(null);
+  const [newCopiesCount, setNewCopiesCount] = useState<number>(3);
+  const [expandedBookIds, setExpandedBookIds] = useState<Record<string, boolean>>({});
+
+  // Modals state
+  const [selectedBookForEdit, setSelectedBookForEdit] = useState<Book | null>(null);
+  const [isShelfModalOpen, setIsShelfModalOpen] = useState<boolean>(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
+  const [isStockOpnameOpen, setIsStockOpnameOpen] = useState<boolean>(false);
+  const [isActivityLogOpen, setIsActivityLogOpen] = useState<boolean>(false);
+
+  // Copy condition / status management modal
+  const [selectedItemForStatus, setSelectedItemForStatus] = useState<BookItem | null>(null);
+  const [statusInput, setStatusInput] = useState<BookStatus>('AVAILABLE');
+  const [conditionNoteInput, setConditionNoteInput] = useState<string>('');
+  const [disposalReasonInput, setDisposalReasonInput] = useState<string>('');
+  const [refreshTick, setRefreshTick] = useState<number>(0);
+
+  const books = libraryStore.getBooks();
+  const allItems = libraryStore.getBookItems();
+  const shelves = libraryStore.getShelves();
+  const categories = libraryStore.getCategories();
+
+  const toggleBookExpand = (bookId: string) => {
+    setExpandedBookIds((prev) => ({
+      ...prev,
+      [bookId]: prev[bookId] === undefined ? false : !prev[bookId],
+    }));
+  };
+
+  const isBookExpanded = (bookId: string) => {
+    return expandedBookIds[bookId] !== false;
+  };
+
+  // Unprinted counts
+  const unprintedCopies = allItems.filter((i) => !i.labelPrinted);
+  const unprintedCount = unprintedCopies.length;
+  const printedCount = allItems.filter((i) => i.labelPrinted).length;
+
+  const filteredBooks = books
+    .filter((b) => {
+      if (selectedCategory !== 'ALL' && b.categoryId !== selectedCategory) return false;
+
+      // Label filter
+      if (labelFilter !== 'ALL') {
+        const bookCopies = allItems.filter((i) => i.bookId === b.id);
+        if (labelFilter === 'UNPRINTED' && !bookCopies.some((i) => !i.labelPrinted)) return false;
+        if (labelFilter === 'PRINTED' && !bookCopies.some((i) => i.labelPrinted)) return false;
+      }
+
+      // Physical copy status filter (Tersedia, Dipinjam, Rusak, Hilang, Dimusnahkan)
+      if (statusFilter !== 'ALL') {
+        const bookCopies = allItems.filter((i) => i.bookId === b.id);
+        if (statusFilter === 'AVAILABLE' && !bookCopies.some((i) => i.status === 'AVAILABLE')) return false;
+        if (statusFilter === 'BORROWED' && !bookCopies.some((i) => i.status === 'BORROWED')) return false;
+        if (
+          statusFilter === 'DAMAGED' &&
+          !bookCopies.some(
+            (i) => i.status === 'DAMAGED' || i.status === 'IN_REPAIR'
+          )
+        )
+          return false;
+        if (statusFilter === 'LOST' && !bookCopies.some((i) => i.status === 'LOST')) return false;
+        if (statusFilter === 'DISPOSED' && !bookCopies.some((i) => i.status === 'DISPOSED')) return false;
+      }
+
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return (
+          b.title.toLowerCase().includes(q) ||
+          b.author.toLowerCase().includes(q) ||
+          b.isbn.includes(q) ||
+          (b.shelfLocation && b.shelfLocation.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'TITLE') return a.title.localeCompare(b.title);
+      if (sortBy === 'COPIES') {
+        const countA = allItems.filter((i) => i.bookId === a.id).length;
+        const countB = allItems.filter((i) => i.bookId === b.id).length;
+        return countB - countA;
+      }
+      // NEWEST
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+
+  const handleAddCopies = () => {
+    if (!selectedBookForCopies) return;
+    const added = libraryStore.addCopiesToBook(selectedBookForCopies.id, newCopiesCount, 'BELI');
+    soundFx.playSuccessChime();
+    alert(`Berhasil menambahkan ${added.length} eksemplar fisik baru untuk "${selectedBookForCopies.title}".`);
+    setSelectedBookForCopies(null);
+  };
+
+  const handleOpenStatusModal = (item: BookItem) => {
+    setSelectedItemForStatus(item);
+    setStatusInput(item.status);
+    setConditionNoteInput(item.conditionNote || '');
+    setDisposalReasonInput(item.disposalReason || '');
+    soundFx.playScanBeep();
+  };
+
+  const handleSaveItemStatus = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItemForStatus) return;
+
+    if (statusInput === 'DISPOSED' && !disposalReasonInput.trim()) {
+      alert('Mohon isi Alasan Pemusnahan / Berita Acara untuk arsip inventaris sekolah.');
+      return;
+    }
+
+    libraryStore.updateItemStatus(
+      selectedItemForStatus.id,
+      statusInput,
+      conditionNoteInput.trim() || undefined,
+      statusInput === 'DISPOSED' ? disposalReasonInput.trim() : undefined
+    );
+
+    soundFx.playSuccessChime();
+    setSelectedItemForStatus(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Page Header: Localized & Uniform */}
+      <PageHeader
+        icon={<Layers className="h-5 w-5" />}
+        title={t.booksHeaderTitle || 'Koleksi & Eksemplar Fisik'}
+        subtitle={t.booksHeaderSubtitle || 'Manajemen katalog judul buku (Biblio) dan inventaris eksemplar fisik (Barcode unik SBTH)'}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsStockOpnameOpen(true)}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              title="Audit Fisik & Stock Opname Koleksi Buku"
+            >
+              <ClipboardCheck className="h-4 w-4 text-emerald-500" />
+              <span>Stock Opname</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsShelfModalOpen(true)}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              title="Kelola Struktur & Penamaan Rak SBTH"
+            >
+              <MapPin className="h-4 w-4 text-amber-500" />
+              <span>Template Rak</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              title="Kelola Kategori, Warna Punggung & Ikon"
+            >
+              <Tag className="h-4 w-4 text-purple-400" />
+              <span>Kategori & Warna</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsActivityLogOpen(true)}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              title="Buka Log Riwayat Aktivitas Besar"
+            >
+              <History className="h-4 w-4 text-blue-400" />
+              <span>Log Riwayat</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenScanIsbn}
+              className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>{t.addBookScanIsbn || 'Scan ISBN'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenLabelPrinter([])}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <Printer className="h-4 w-4 text-text-muted" />
+              <span>{t.printLabelsBtn || 'Cetak Label'}</span>
+            </button>
+          </>
+        }
+      />
+
+      {/* Unprinted Label Sticker Warning Banner */}
+      {unprintedCount > 0 && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5 text-amber-500 font-semibold">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              {language === 'zh'
+                ? `提醒：尚有 ${unprintedCount} 本实体图书尚未打印或贴上条形码书标！`
+                : language === 'en'
+                ? `Notice: There are ${unprintedCount} book copies that do not have printed barcode labels affixed yet.`
+                : `Perhatian: Terdapat ${unprintedCount} eksemplar buku yang belum dicetak atau belum ditempel stiker barcode fisik!`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const unprintedBarcodes = unprintedCopies.map((i) => i.itemBarcode);
+              onOpenLabelPrinter(unprintedBarcodes);
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shrink-0 transition flex items-center gap-1.5"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            <span>
+              {language === 'zh' ? '立即打印待贴标' : language === 'en' ? 'Print Missing Labels' : 'Cetak Label Sekarang'}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* 2. Toolbar: Search on left + Segmented Category Chips + View & Sort Toggles */}
+      <div className="rounded-2xl bg-surface border border-border p-3.5 space-y-3 shadow-xs">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.searchBiblioPlaceholder || 'Cari judul buku, nama pengarang, atau nomor ISBN...'}
+              className="w-full rounded-xl border border-border bg-surface-2 pl-10 pr-4 py-2 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+
+          {/* Filter Label Status & Sort & View Mode */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Label Print Filter */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
+              <Tag className="h-3.5 w-3.5 text-text-muted" />
+              <select
+                value={labelFilter}
+                onChange={(e) => setLabelFilter(e.target.value as any)}
+                className="bg-transparent border-none outline-hidden text-xs text-text cursor-pointer font-medium"
+              >
+                <option value="ALL" className="bg-surface text-text">
+                  {t.allLabels || 'Semua Label'}
+                </option>
+                <option value="UNPRINTED" className="bg-surface text-text">
+                  {t.labelNotPrinted || 'Belum Cetak Label'} ({unprintedCount})
+                </option>
+                <option value="PRINTED" className="bg-surface text-text">
+                  {t.labelPrinted || 'Sudah Ditempel Label'} ({printedCount})
+                </option>
+              </select>
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
+              <ArrowUpDown className="h-3.5 w-3.5 text-text-muted" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-transparent border-none outline-hidden text-xs text-text cursor-pointer font-medium"
+              >
+                <option value="NEWEST" className="bg-surface text-text">{t.sortNewest || 'Terbaru'}</option>
+                <option value="TITLE" className="bg-surface text-text">{t.sortTitle || 'Judul A-Z'}</option>
+                <option value="COPIES" className="bg-surface text-text">{t.sortCopies || 'Paling Banyak Eksemplar'}</option>
+              </select>
+            </div>
+
+            {/* View Mode Toggle (Cards, Table Tanpa Cover, Grid) */}
+            <div className="flex items-center p-1 rounded-xl bg-surface-2 border border-border">
+              <button
+                type="button"
+                onClick={() => setViewMode('CARDS')}
+                className={`p-1.5 rounded-lg transition ${
+                  viewMode === 'CARDS'
+                    ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+                title="Tampilan Kartu Lengkap & Cover"
+              >
+                <ListIcon className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('TABLE')}
+                className={`p-1.5 rounded-lg transition ${
+                  viewMode === 'TABLE'
+                    ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+                title="Tampilan Mode List / Tabel Cepat (Tanpa Cover)"
+              >
+                <TableIcon className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('GRID')}
+                className={`p-1.5 rounded-lg transition ${
+                  viewMode === 'GRID'
+                    ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+                title="Tampilan Grid Sampul"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Category Chips Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+              selectedCategory === 'ALL'
+                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                : 'bg-surface-2 text-text-muted hover:text-text'
+            }`}
+          >
+            {language === 'zh' ? '全部' : language === 'en' ? 'All' : 'Semua'} ({books.length})
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition ${
+                selectedCategory === cat.id
+                  ? 'bg-surface-2 border border-amber-500 text-amber-500 font-bold'
+                  : 'bg-surface-2 text-text-muted hover:text-text'
+              }`}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: cat.colorHex }}
+              />
+              {cat.shortName}
+            </button>
+          ))}
+        </div>
+
+        {/* Physical Status Filter Pills (Semua, Tersedia, Dipinjam, Rusak, Hilang, Dimusnahkan) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-border/60 text-xs font-semibold">
+          <span className="text-[11px] text-text-muted mr-1 shrink-0">Filter Status:</span>
+          {[
+            { id: 'ALL', label: 'Semua Status' },
+            { id: 'AVAILABLE', label: 'Tersedia di Rak' },
+            { id: 'BORROWED', label: 'Sedang Dipinjam' },
+            { id: 'DAMAGED', label: 'Perbaikan / Rusak' },
+            { id: 'LOST', label: 'Buku Hilang' },
+            { id: 'DISPOSED', label: 'Dimusnahkan' },
+          ].map((st) => (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => setStatusFilter(st.id as any)}
+              className={`px-2.5 py-1 rounded-lg transition whitespace-nowrap text-[11px] ${
+                statusFilter === st.id
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                  : 'bg-surface-2 text-text-muted hover:text-text'
+              }`}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Book List Cards / Table / Grid */}
+      {viewMode === 'TABLE' ? (
+        <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-surface-2 text-text-muted border-b border-border font-semibold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4">No & Judul Buku</th>
+                  <th className="py-3 px-3">Kategori</th>
+                  <th className="py-3 px-3">ISBN & Eksemplar</th>
+                  <th className="py-3 px-3">Posisi Rak (Cepat)</th>
+                  <th className="py-3 px-3">Kondisi / Status</th>
+                  <th className="py-3 px-3 text-right">Nilai Aset</th>
+                  <th className="py-3 px-4 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredBooks.map((book, idx) => {
+                  const items = allItems.filter((i) => i.bookId === book.id);
+                  const available = items.filter((i) => i.status === 'AVAILABLE').length;
+                  const borrowed = items.filter((i) => i.status === 'BORROWED').length;
+                  const inRepair = items.filter((i) => i.status === 'IN_REPAIR').length;
+                  const damaged = items.filter((i) => i.status === 'DAMAGED').length;
+                  const lost = items.filter((i) => i.status === 'LOST').length;
+                  const disposed = items.filter((i) => i.status === 'DISPOSED').length;
+                  const cat = categories.find((c) => c.id === book.categoryId) || CATEGORIES[0];
+
+                  return (
+                    <tr key={book.id} className="hover:bg-surface-2/50 transition">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] text-text-muted w-5 shrink-0">{idx + 1}.</span>
+                          <div>
+                            <div
+                              className="font-bold text-text hover:text-amber-500 transition cursor-pointer"
+                              onClick={() => setSelectedBookForEdit(book)}
+                            >
+                              {book.title}
+                            </div>
+                            <div className="text-[11px] text-text-muted mt-0.5">
+                              {book.author} • {book.publisher} ({book.publicationYear}) {book.pageCount ? `• ${book.pageCount} Hal` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1"
+                          style={{ backgroundColor: `${cat.colorHex}20`, color: cat.colorHex }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cat.colorHex }} />
+                          {cat.shortName}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-text-muted">
+                        <div>{book.isbn}</div>
+                        <div className="text-[10px] text-amber-500 font-sans font-semibold">{items.length} Eksemplar</div>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {/* Inline quick shelf changer dropdown without popup */}
+                        <div className="inline-flex items-center gap-1 bg-surface-2 px-2 py-1 rounded-lg border border-border">
+                          <MapPin className="h-3 w-3 text-amber-500 shrink-0" />
+                          <select
+                            value={book.shelfLocation || ''}
+                            onChange={(e) => {
+                              const newShelf = e.target.value;
+                              libraryStore.updateBookShelf(book.id, newShelf);
+                              soundFx.playSuccessChime();
+                              setRefreshTick((r) => r + 1);
+                            }}
+                            className="bg-transparent text-[11px] font-semibold text-text outline-hidden cursor-pointer max-w-[130px] truncate"
+                            title="Klik untuk langsung memindahkan rak buku ini"
+                          >
+                            <option value="" className="bg-surface text-text">Pilih Rak...</option>
+                            {shelves.map((sh) => (
+                              <option key={sh.id} value={`${sh.name} - Baris 1`} className="bg-surface text-text">
+                                {sh.name} ({sh.categoryName})
+                              </option>
+                            ))}
+                            {book.shelfLocation && !shelves.some(s => s.name === book.shelfLocation?.split(' - ')[0]) && (
+                              <option value={book.shelfLocation} className="bg-surface text-text">
+                                {book.shelfLocation}
+                              </option>
+                            )}
+                          </select>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-bold">
+                            {available} Ada
+                          </span>
+                          {borrowed > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold">
+                              {borrowed} Pinjam
+                            </span>
+                          )}
+                          {(damaged > 0 || inRepair > 0) && (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-500 font-bold">
+                              {damaged + inRepair} Rusak
+                            </span>
+                          )}
+                          {lost > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 font-bold">
+                              {lost} Hilang
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap text-right font-mono text-[11px] text-text">
+                        {book.assetValue ? `Rp ${book.assetValue.toLocaleString('id-ID')}` : '-'}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBookForEdit(book)}
+                            className="p-1.5 rounded-lg border border-border hover:bg-surface-2 text-amber-500 transition cursor-pointer"
+                            title="Edit Buku & Eksemplar"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBookForCopies(book)}
+                            className="p-1.5 rounded-lg border border-border hover:bg-surface-2 text-emerald-500 transition cursor-pointer"
+                            title="Tambah Eksemplar"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onOpenLabelPrinter(items.map((i) => i.itemBarcode))}
+                            className="p-1.5 rounded-lg border border-border hover:bg-surface-2 text-text-muted hover:text-text transition cursor-pointer"
+                            title="Cetak Label Barcode"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className={viewMode === 'GRID' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'space-y-4'}>
+          {filteredBooks.map((book) => {
+            const items = allItems.filter((i) => i.bookId === book.id);
+            const available = items.filter((i) => i.status === 'AVAILABLE').length;
+            const borrowed = items.filter((i) => i.status === 'BORROWED').length;
+            const inRepair = items.filter((i) => i.status === 'IN_REPAIR').length;
+            const damaged = items.filter((i) => i.status === 'DAMAGED').length;
+            const lost = items.filter((i) => i.status === 'LOST').length;
+            const disposed = items.filter((i) => i.status === 'DISPOSED').length;
+            const unprintedInBook = items.filter((i) => !i.labelPrinted).length;
+            const cat = categories.find((c) => c.id === book.categoryId) || CATEGORIES[0];
+            const expanded = isBookExpanded(book.id);
+
+            return (
+              <div
+                key={book.id}
+                className="rounded-2xl bg-surface border border-border p-4 sm:p-5 shadow-xs hover:border-border/80 transition space-y-4"
+              >
+                {/* Card Header: Cover (56x75) | Info | Badges & Actions */}
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div className="h-[75px] w-[56px] rounded-lg overflow-hidden shrink-0 border border-border bg-surface-2 shadow-2xs">
+                      <SmartBookCover
+                        title={book.title}
+                        author={book.author}
+                        coverUrl={book.coverImage}
+                        categoryId={book.categoryId}
+                        aspectRatio="h-full w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase"
+                          style={{ backgroundColor: `${cat.colorHex}20`, color: cat.colorHex }}
+                        >
+                          {cat.name}
+                        </span>
+                        <span className="text-[11px] font-mono text-text-muted">
+                          ISBN: {book.isbn}
+                        </span>
+                        {unprintedInBook > 0 && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                            {unprintedInBook} Belum Cetak Label
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-sm sm:text-base font-semibold text-text mt-1 leading-snug">
+                        {book.title}
+                      </h3>
+                      
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-muted mt-1">
+                        <span>{book.author} • {book.publisher} ({book.publicationYear})</span>
+                        {book.pageCount && <span>• 📄 {book.pageCount} Hal</span>}
+                        <span>•</span>
+                        {/* Quick Inline Shelf Selector */}
+                        <div className="inline-flex items-center gap-1 bg-surface-2 px-2 py-0.5 rounded-md border border-border">
+                          <MapPin className="h-3 w-3 text-amber-500 shrink-0" />
+                          <select
+                            value={book.shelfLocation || ''}
+                            onChange={(e) => {
+                              const newShelf = e.target.value;
+                              libraryStore.updateBookShelf(book.id, newShelf);
+                              soundFx.playSuccessChime();
+                              setRefreshTick((r) => r + 1);
+                            }}
+                            className="bg-transparent text-[11px] font-semibold text-amber-500 outline-hidden cursor-pointer"
+                            title="Ubah posisi rak buku ini langsung tanpa popup"
+                          >
+                            <option value="" className="bg-surface text-text">Pilih Posisi Rak...</option>
+                            {shelves.map((sh) => (
+                              <option key={sh.id} value={`${sh.name} - Baris 1`} className="bg-surface text-text">
+                                {sh.name} ({sh.categoryName})
+                              </option>
+                            ))}
+                            {book.shelfLocation && !shelves.some(s => s.name === book.shelfLocation?.split(' - ')[0]) && (
+                              <option value={book.shelfLocation} className="bg-surface text-text">
+                                {book.shelfLocation}
+                              </option>
+                            )}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Pills & Actions */}
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[11px] font-medium">
+                        {available} Ada di Rak
+                      </span>
+                      {borrowed > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[11px] font-medium">
+                          {borrowed} Dipinjam
+                        </span>
+                      )}
+                      {inRepair > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-sky-500/10 text-sky-500 border border-sky-500/20 text-[11px] font-medium">
+                          {inRepair} Perbaikan
+                        </span>
+                      )}
+                      {damaged > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[11px] font-medium">
+                          {damaged} Rusak
+                        </span>
+                      )}
+                      {lost > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-purple-500/10 text-purple-500 border border-purple-500/20 text-[11px] font-medium">
+                          {lost} Hilang
+                        </span>
+                      )}
+                      {disposed > 0 && (
+                        <span className="px-2.5 py-1 rounded-md bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[11px] font-medium">
+                          {disposed} Dimusnahkan
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBookForEdit(book)}
+                        className="px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-2 text-amber-500 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title={t.editBook || 'Edit Buku & Eksemplar'}
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        <span>{language === 'zh' ? '编辑' : language === 'en' ? 'Edit' : 'Edit Buku'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBookForCopies(book)}
+                        className="px-3 py-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface text-text text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Tambah Eksemplar Fisik"
+                      >
+                        <Plus className="h-3.5 w-3.5 text-emerald-500" />
+                        <span>Eksemplar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenLabelPrinter(items.map((i) => i.itemBarcode))}
+                        className="px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-2 text-text text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Printer className="h-3.5 w-3.5 text-text-muted" />
+                        <span>Cetak Label ({items.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleBookExpand(book.id)}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-2 transition cursor-pointer"
+                        title={expanded ? 'Tutup Daftar Eksemplar' : 'Buka Daftar Eksemplar'}
+                      >
+                        {expanded ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Physical Copies Collapsible Section */}
+                {expanded && (
+                  <div className="pt-3 border-t border-border/60">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                        Daftar Eksemplar Fisik ({items.length} Buku) • Klik chip untuk kelola status / perbaikan
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {items.map((item) => {
+                        let borderClass = 'border-l-emerald-500';
+                        let statusBadge = (
+                          <span className="text-emerald-500 font-bold">TERSEDIA</span>
+                        );
+
+                        if (item.status === 'BORROWED') {
+                          borderClass = 'border-l-amber-500';
+                          statusBadge = <span className="text-amber-500 font-bold">DIPINJAM</span>;
+                        } else if (item.status === 'IN_REPAIR') {
+                          borderClass = 'border-l-sky-500';
+                          statusBadge = <span className="text-sky-500 font-bold">PERBAIKAN</span>;
+                        } else if (item.status === 'DAMAGED') {
+                          borderClass = 'border-l-rose-500';
+                          statusBadge = <span className="text-rose-500 font-bold">RUSAK</span>;
+                        } else if (item.status === 'LOST') {
+                          borderClass = 'border-l-purple-500';
+                          statusBadge = <span className="text-purple-500 font-bold">HILANG</span>;
+                        } else if (item.status === 'DISPOSED') {
+                          borderClass = 'border-l-slate-500 opacity-60';
+                          statusBadge = <span className="text-slate-400 font-bold">DIMUSNAHKAN</span>;
+                        }
+
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => handleOpenStatusModal(item)}
+                            className={`p-2.5 rounded-xl bg-surface-2 border-0 border-l-[3px] ${borderClass} hover:ring-1 hover:ring-amber-500/50 cursor-pointer transition flex flex-col justify-between select-none shadow-2xs`}
+                            title="Klik untuk ubah kondisi (Buku Rusak, Perbaikan, Hilang, Dimusnahkan)"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-semibold text-text">
+                                {item.itemBarcode}
+                              </span>
+                              <span className="text-[10px] text-text-muted font-medium">
+                                #{item.copyNumber}
+                              </span>
+                            </div>
+
+                            <div className="mt-1.5 flex items-center justify-between text-[10px]">
+                              {statusBadge}
+                              <span className="text-text-muted truncate max-w-[70px]">
+                                {item.source === 'BELI_SEKOLAH' ? 'Beli' : 'Sumbangan'}
+                              </span>
+                            </div>
+
+                            {/* Shelf & Label Status indicator */}
+                            <div className="mt-1 pt-1 border-t border-border/40 flex items-center justify-between text-[9px] text-text-muted">
+                              <span className="truncate">📍 {item.shelfLocation || book.shelfLocation || 'Rak'}</span>
+                              <span className={item.labelPrinted ? 'text-emerald-500' : 'text-amber-500'}>
+                                {item.labelPrinted ? '🏷️ Ditempel' : '⚠️ Belum'}
+                              </span>
+                            </div>
+
+                            {item.conditionNote && (
+                              <div className="mt-0.5 text-[9px] text-text-muted truncate" title={item.conditionNote}>
+                                📝 {item.conditionNote}
+                              </div>
+                            )}
+
+                            {item.status === 'DISPOSED' && item.disposalReason && (
+                              <div className="mt-0.5 text-[9px] text-rose-500 truncate" title={item.disposalReason}>
+                                🗑️ {item.disposalReason}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+
+      {/* MODAL EDIT BUKU LENGKAP */}
+      {selectedBookForEdit && (
+        <EditBookModal
+          book={selectedBookForEdit}
+          isOpen={!!selectedBookForEdit}
+          onClose={() => setSelectedBookForEdit(null)}
+          onSaved={() => {
+            setSelectedBookForEdit(null);
+            setRefreshTick((r) => r + 1);
+          }}
+        />
+      )}
+
+      {/* 4 MODALS SISTEM LENGKAP: RAK DINAMIS, KATEGORI & WARNA, STOCK OPNAME, LOG RIWAYAT BESAR */}
+      <ShelfManagementModal
+        isOpen={isShelfModalOpen}
+        onClose={() => {
+          setIsShelfModalOpen(false);
+          setRefreshTick((r) => r + 1);
+        }}
+      />
+
+      <CategoryManagementModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => {
+          setIsCategoryModalOpen(false);
+          setRefreshTick((r) => r + 1);
+        }}
+      />
+
+      <StockOpnameModal
+        isOpen={isStockOpnameOpen}
+        onClose={() => {
+          setIsStockOpnameOpen(false);
+          setRefreshTick((r) => r + 1);
+        }}
+      />
+
+      <ActivityLogModal
+        isOpen={isActivityLogOpen}
+        onClose={() => {
+          setIsActivityLogOpen(false);
+        }}
+      />
+
+      {/* Modal Tambah Eksemplar Cepat */}
+      {selectedBookForCopies && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-sm rounded-2xl bg-surface border border-border p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-text">Tambah Eksemplar Fisik</h3>
+            <p className="text-xs text-text-muted">
+              Tambahkan eksemplar fisik baru untuk buku:{' '}
+              <strong className="text-text">{selectedBookForCopies.title}</strong>
+            </p>
+
+            <div>
+              <label className="text-xs font-semibold text-text block mb-1">
+                Jumlah Eksemplar Tambahan:
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={newCopiesCount}
+                onChange={(e) => setNewCopiesCount(Number(e.target.value))}
+                className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs font-bold text-text outline-hidden"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setSelectedBookForCopies(null)}
+                className="px-4 py-2 text-xs font-semibold text-text-muted rounded-xl hover:bg-surface-2"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCopies}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs"
+              >
+                Tambah Eksemplar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ubah Status / Kondisi Eksemplar */}
+      {selectedItemForStatus && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-2xl bg-surface border border-border p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-base font-bold text-text">Kelola Kondisi Eksemplar Fisik</h3>
+                <span className="text-xs font-mono text-amber-500 font-semibold">
+                  {selectedItemForStatus.itemBarcode} (Copy #{selectedItemForStatus.copyNumber})
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedItemForStatus(null)}
+                className="p-1 rounded-lg text-text-muted hover:text-text"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveItemStatus} className="space-y-3 text-xs">
+              <div>
+                <label className="text-xs font-semibold text-text block mb-1">
+                  Status Fisik Saat Ini:
+                </label>
+                <select
+                  value={statusInput}
+                  onChange={(e) => setStatusInput(e.target.value as BookStatus)}
+                  className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-text outline-hidden"
+                >
+                  <option value="AVAILABLE">🟢 Tersedia di Rak (Baik & Siap Pinjam)</option>
+                  <option value="IN_REPAIR">🟡 Sedang Diperbaiki (Dilem / Perawatan Guru)</option>
+                  <option value="DAMAGED">🔴 Rusak Berat (Perlu Diganti)</option>
+                  <option value="LOST">🟣 Hilang</option>
+                  <option value="DISPOSED">🗑️ Dimusnahkan (Dihapus dari Aset Aktif)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text block mb-1">
+                  Catatan Kondisi Fisik:
+                </label>
+                <input
+                  type="text"
+                  value={conditionNoteInput}
+                  onChange={(e) => setConditionNoteInput(e.target.value)}
+                  placeholder="Contoh: Halaman 4 robek sedikit, sudah diisolasi bening"
+                  className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Disposal Reason input if DISPOSED */}
+              {statusInput === 'DISPOSED' && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-2">
+                  <label className="text-xs font-bold text-rose-500 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    Alasan Pemusnahan / No. Berita Acara:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={disposalReasonInput}
+                    onChange={(e) => setDisposalReasonInput(e.target.value)}
+                    placeholder="Contoh: BA-MUSNAH/2026/04 - Buku basah parah dan berjamur, disetujui Kepala Sekolah"
+                    className="w-full rounded-lg border border-rose-500/40 bg-surface px-3 py-2 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-rose-400"
+                    required
+                  />
+                  <p className="text-[10px] text-text-muted">
+                    💡 <em>Aturan Akuntansi Perpustakaan:</em> Nilai buku ini akan otomatis dikurangkan dari nilai total aset rak perpustakaan, namun riwayat eksemplar tetap tersimpan dalam sistem untuk audit akreditasi.
+                  </p>
+                </div>
+              )}
+
+              {/* Riwayat Peminjaman Eksemplar Ini */}
+              {(() => {
+                const itemCirc = libraryStore.getItemCirculationInfo(selectedItemForStatus.itemBarcode);
+                return (
+                  <div className="pt-2 border-t border-border space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                        <History className="h-3.5 w-3.5 text-text-muted" />
+                        Riwayat Peminjaman Eksemplar Ini ({itemCirc.history.length}x)
+                      </span>
+                    </div>
+                    {itemCirc.history && itemCirc.history.length > 0 ? (
+                      <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
+                        {itemCirc.history.map((h, i) => (
+                          <div
+                            key={i}
+                            className="p-2 rounded-lg bg-surface-2 border border-border text-[11px] flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-semibold text-text">
+                                {h.member.name}{' '}
+                                <span className="text-text-muted font-normal">
+                                  ({h.member.classGroup})
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-text-muted">
+                                Pinjam: {h.loan.loanDate} → Kembali:{' '}
+                                {h.loanItem.returnDate || 'Belum'}
+                              </div>
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                h.loanItem.returnDate
+                                  ? 'bg-emerald-500/15 text-emerald-500'
+                                  : 'bg-amber-500/15 text-amber-500'
+                              }`}
+                            >
+                              {h.loanItem.returnDate ? 'Dikembalikan' : 'Sedang Dipinjam'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-text-muted italic">
+                        Eksemplar fisik ini baru dan belum memiliki riwayat peminjaman.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemForStatus(null)}
+                  className="px-4 py-2 text-xs font-semibold text-text-muted rounded-xl hover:bg-surface-2 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition"
+                >
+                  Simpan Perubahan Status
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

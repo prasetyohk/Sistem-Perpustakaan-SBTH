@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📚 Perpustakaan Digital KB-TK Bhakti Tunas Harapan (SBTH) Magelang
 
-## Getting Started
+Sistem Informasi Manajemen Perpustakaan Terpadu untuk **KB-TK Bhakti Tunas Harapan (SBTH) Magelang** (*"Be Smart, Be Kind"* 好好学习，天天向上).
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## ✨ Fitur Unggulan
+- **Kiosk Katalog Visual Anak (OPAC)**: Desain playful ramah anak usia dini (TK & PAUD) dengan dukungan trilingual (Indonesia, English, 中文), pencarian topik cepat (Hewan, Dinosaurus, Dongeng), carousel buku baru, dan peringkat buku terpopuler.
+- **Sirkulasi Cepat Meja Pustakawan**: Alur 2-langkah dengan audio feedback (bip scanner & chime sukses), pemindaian barcode USB, pengembalian buku 1-detik, dan deteksi denda otomatis.
+- **Manajemen Koleksi & ISBN**: Input otomatis metadata buku via Google Books API, kelola multi-eksemplar fisik, catatan kondisi buku (tersedia, rusak, hilang, dimusnahkan), dan generator cetak label stiker barcode rak.
+- **Data Anggota & Transisi Kelas Massal**: Kelola anggota Toddler, Nursery, TK-A, TK-B, Guru, dan Pojok Baca Kelas. Fitur satu klik kenaikan kelas tahun ajaran baru serta cetak kartu anggota pustaka anak.
+- **Kas Keuangan & Denda QRIS**: Drawer kas yang lapang, pencatatan otomatis denda keterlambatan (Rp 500/hari), serta kartu pembayaran QRIS bersih.
+- **Analitik & Ekspor Excel**: Rekap profil nilai total aset buku, buku dead-stock vs favorit, analisis penerbit & pengarang, serta ekspor format Excel (.xlsx) siap laporan Yayasan / akreditasi.
+- **Backup & Pengingat Telegram**: Laporan berkala dan auto-backup database tanpa biaya langganan server.
+
+---
+
+## 🚀 Menjalankan Aplikasi
+
+### Di Komputer Sekolah (Windows)
+Cukup klik ganda:
+```text
+start_perpus_sbth.bat
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Melalui Perintah Terminal
+```bash
+# Pasang dependensi (jika baru diinstal)
+npm install
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Jalankan server lokal
+npm run dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Buat berkas build produksi
+npm run build
+```
+Buka peramban di `http://localhost:3000`.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 📖 Dokumentasi Lengkap
+Panduan langkah demi langkah penggunaan sistem untuk Pustakawan, Guru, dan Orang Tua tersedia di berkas:
+👉 **[PANDUAN_PENGGUNAAN.md](./PANDUAN_PENGGUNAAN.md)**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 👨‍💻 Pengembang & Bantuan Teknis
+- **Pengembang**: Prasetyo Handy Kurniawan
+- **WhatsApp**: [+62 812-9125-5917](https://wa.me/6281291255917)
+- **Email**: prasetyo.handy@gmail.com
+- **Lokasi**: Kota Magelang, Jawa Tengah
