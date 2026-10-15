@@ -357,7 +357,7 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
                 </h4>
                 <ul className="text-xs text-blue-800 dark:text-blue-300 space-y-1.5 list-disc list-inside">
                   <li>
-                    <strong>Sheet 1 (Rekap_Bulanan):</strong> Buku masuk (beli vs sumbangan), sirkulasi, buku rusak/hilang, dan rekap kas denda/infaq masuk.
+                    <strong>Sheet 1 (Rekap_Bulanan):</strong> Buku masuk (beli vs sumbangan), sirkulasi, buku rusak/hilang, dan rekap kas denda keterlambatan masuk.
                   </li>
                   <li>
                     <strong>Sheet 2 (Master_Katalog):</strong> ISBN, judul, pengarang, penerbit, warna kategori, rak, total stok, dan ketersediaan.

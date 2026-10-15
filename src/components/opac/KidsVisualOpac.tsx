@@ -49,6 +49,7 @@ interface KidsVisualOpacProps {
   onOpenScanIsbn?: () => void;
   isKioskMode?: boolean;
   onOpenLibrarianLogin?: () => void;
+  onOpenStudentPortal?: () => void;
 }
 
 export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
@@ -56,6 +57,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
   onOpenScanIsbn,
   isKioskMode = false,
   onOpenLibrarianLogin,
+  onOpenStudentPortal,
 }) => {
   const [mounted, setMounted] = useState<boolean>(false);
   const [lang, setLang] = useState<Language>('id');
@@ -82,14 +84,15 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
   const [activeHighlightTab, setActiveHighlightTab] = useState<'NEW' | 'POPULAR' | 'AGE'>('NEW');
   const [isHighlightsMinimized, setIsHighlightsMinimized] = useState<boolean>(false);
 
-  // 📢 CMS Library News
+  // 📢 CMS Library News (Multi-pinned auto-sliding carousel)
   const [libraryNews, setLibraryNews] = useState<LibraryNewsArticle[]>([]);
   const [activeNewsArticle, setActiveNewsArticle] = useState<LibraryNewsArticle | null>(null);
+  const [activeNewsIndex, setActiveNewsIndex] = useState<number>(0);
 
   // 📌 Book Reservation state
   const [isReservationModalOpen, setIsReservationModalOpen] = useState<boolean>(false);
   const [reservationBook, setReservationBook] = useState<Book | null>(null);
-  const [selectedResMemberId, setSelectedResMemberId] = useState<string>('');
+  const [desiredPickupDate, setDesiredPickupDate] = useState<string>('');
   const [reservationNotice, setReservationNotice] = useState<string | null>(null);
 
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null);
@@ -667,52 +670,129 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
       </div>
 
       {/* =========================================================================
-          2. CMS LIBRARY NEWS & ANNOUNCEMENT TICKER (If active announcements exist)
+          2. CMS LIBRARY NEWS & ANNOUNCEMENT MULTI-PINNED CAROUSEL TICKER
           ========================================================================= */}
-      {libraryNews.filter((n) => n.isActive).length > 0 && (
-        <div className="space-y-2">
-          {libraryNews
-            .filter((n) => n.isActive)
-            .slice(0, 1)
-            .map((news) => (
+      {(() => {
+        const activeNews = libraryNews
+          .filter((n) => n.isActive)
+          .sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime();
+          });
+
+        if (activeNews.length === 0) return null;
+
+        const currentArticle = activeNews[activeNewsIndex % activeNews.length];
+
+        return (
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-surface-2 border border-amber-500/30 p-3 sm:p-4 shadow-xs transition hover:border-amber-500/60 group">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Left Side: Category, Pinned tag, Title & Date */}
               <div
-                key={news.id}
                 onClick={() => {
-                  setActiveNewsArticle(news);
+                  setActiveNewsArticle(currentArticle);
                   soundFx.playScanBeep();
                 }}
-                className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-surface-2 border border-amber-500/30 flex items-center justify-between gap-3 shadow-xs hover:border-amber-500/60 transition cursor-pointer group"
+                className="flex items-start sm:items-center gap-3 min-w-0 cursor-pointer flex-1"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-8 w-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition">
-                    <Newspaper className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                        {news.category === 'HOLIDAY'
-                          ? 'Libur / Tutup'
-                          : news.category === 'STOCK_OPNAME'
-                          ? 'Stock Opname'
-                          : news.category === 'EVENT'
-                          ? 'Agenda / Event'
-                          : 'Pengumuman Resmi'}
-                      </span>
-                      <span className="text-[10px] text-text-muted">• {news.publishedDate}</span>
-                    </div>
-                    <p className="text-xs font-bold text-text truncate group-hover:text-amber-500 transition">
-                      {news.title}
-                    </p>
-                  </div>
+                <div className="h-9 w-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition">
+                  <Newspaper className="h-4 w-4" />
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 text-amber-500 text-xs font-semibold">
-                  <span className="hidden sm:inline">Baca Info</span>
-                  <ChevronRightCircle className="h-4 w-4" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {currentArticle.isPinned && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/40 text-[9px] font-extrabold uppercase tracking-wider">
+                        📌 Disematkan
+                      </span>
+                    )}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                      {currentArticle.category === 'HOLIDAY'
+                        ? 'Libur / Tutup'
+                        : currentArticle.category === 'STOCK_OPNAME'
+                        ? 'Stock Opname'
+                        : currentArticle.category === 'EVENT'
+                        ? 'Agenda / Event'
+                        : 'Pengumuman Resmi'}
+                    </span>
+                    <span className="text-[10px] text-text-muted">• {currentArticle.publishedDate}</span>
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold text-text truncate group-hover:text-amber-500 transition mt-0.5">
+                    {currentArticle.title}
+                  </p>
                 </div>
               </div>
-            ))}
-        </div>
-      )}
+
+              {/* Right Side: Navigation buttons, counter, and Read More */}
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                {activeNews.length > 1 && (
+                  <div className="flex items-center gap-1 bg-surface-2/80 rounded-xl p-1 border border-border">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveNewsIndex((prev) => (prev - 1 + activeNews.length) % activeNews.length);
+                      }}
+                      className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface transition cursor-pointer"
+                      title="Pengumuman Sebelumnya"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-[10px] font-mono text-text-muted px-1.5 font-bold">
+                      {(activeNewsIndex % activeNews.length) + 1}/{activeNews.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveNewsIndex((prev) => (prev + 1) % activeNews.length);
+                      }}
+                      className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface transition cursor-pointer"
+                      title="Pengumuman Berikutnya"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveNewsArticle(currentArticle);
+                    soundFx.playScanBeep();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer active:scale-95"
+                >
+                  <span>Baca Info</span>
+                  <ChevronRightCircle className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Dots Indicator if multiple news items */}
+            {activeNews.length > 1 && (
+              <div className="flex items-center justify-center gap-1.5 pt-2 border-t border-amber-500/10 mt-2">
+                {activeNews.map((n, idx) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveNewsIndex(idx);
+                    }}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                      idx === activeNewsIndex % activeNews.length
+                        ? 'w-6 bg-amber-500'
+                        : 'w-2 bg-text-muted/30 hover:bg-text-muted/60'
+                    }`}
+                    title={n.title}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* =========================================================================
           3. CONSOLIDATED TABBED HIGHLIGHTS CAROUSEL (New Arrivals, Popular, Age Picks)
@@ -1748,19 +1828,44 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                   const avail = items.filter((i) => i.status === 'AVAILABLE').length;
 
                   if (avail === 0) {
+                    const activeStudent = libraryStore.getActiveStudentSession();
                     return (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReservationBook(activeModalBook);
-                          setIsReservationModalOpen(true);
-                          soundFx.playScanBeep();
-                        }}
-                        className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
-                      >
-                        <BookmarkPlus className="h-4 w-4" />
-                        <span>Reservasi Buku Ini (Booking)</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!activeStudent) {
+                              soundFx.playErrorBeep();
+                              alert(
+                                '🔒 Mode Reservasi Khusus Siswa & Orang Tua Terdaftar!\n\nUntuk memesan buku yang sedang dipinjam teman lain, silakan masuk ke Portal Mandiri Siswa terlebih dahulu menggunakan username dan password ananda.'
+                              );
+                              if (onOpenStudentPortal) {
+                                onOpenStudentPortal();
+                              }
+                              return;
+                            }
+                            setReservationBook(activeModalBook);
+                            setDesiredPickupDate(new Date().toISOString().split('T')[0]);
+                            setIsReservationModalOpen(true);
+                            soundFx.playScanBeep();
+                          }}
+                          className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95 cursor-pointer"
+                        >
+                          <BookmarkPlus className="h-4 w-4" />
+                          <span>Reservasi Buku Ini (Booking)</span>
+                        </button>
+                        {!activeStudent && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onOpenStudentPortal) onOpenStudentPortal();
+                            }}
+                            className="text-[10px] text-amber-500 hover:underline font-bold cursor-pointer"
+                          >
+                            Masuk Portal Siswa untuk pesan →
+                          </button>
+                        )}
+                      </div>
                     );
                   }
 
@@ -1772,7 +1877,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                           onSelectBookForLoan(activeModalBook);
                           setActiveModalBook(null);
                         }}
-                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95 cursor-pointer"
                       >
                         <Zap className="h-4 w-4" />
                         <span>Pinjam Sekarang</span>
@@ -1787,7 +1892,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveModalBook(null)}
-                className="px-5 py-2.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-text font-bold text-xs transition"
+                className="px-5 py-2.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-text font-bold text-xs transition cursor-pointer"
               >
                 Tutup
               </button>
@@ -1797,114 +1902,142 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
       )}
 
       {/* =========================================================================
-          MODAL: RESERVASI BUKU (BOOKING UNTUK SISWA)
+          MODAL: RESERVASI BUKU (BOOKING KHUSUS SISWA TERDAFTAR)
           ========================================================================= */}
-      {isReservationModalOpen && reservationBook && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-2xl border border-border p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
-                  <BookmarkPlus className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-text">Reservasi Buku (Booking)</h3>
-                  <p className="text-[11px] text-text-muted">Simpan buku saat dikembalikan agar tidak diambil orang</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsReservationModalOpen(false);
-                  setReservationBook(null);
-                }}
-                className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-2"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      {isReservationModalOpen && reservationBook && (() => {
+        const activeStudent = libraryStore.getActiveStudentSession();
+        if (!activeStudent) return null;
 
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-surface-2 border border-border">
-              <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 border border-border bg-slate-900">
-                <SmartBookCover
-                  title={reservationBook.title}
-                  author={reservationBook.author}
-                  coverUrl={reservationBook.coverImage}
-                  categoryId={reservationBook.categoryId}
-                  aspectRatio="h-full w-full"
-                />
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
+            <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-2xl border border-border p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                    <BookmarkPlus className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-text">Reservasi Buku (Booking)</h3>
+                    <p className="text-[11px] text-text-muted">Simpan buku saat dikembalikan agar tidak diambil orang</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReservationModalOpen(false);
+                    setReservationBook(null);
+                    setDesiredPickupDate('');
+                  }}
+                  className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-2 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div className="min-w-0">
-                <h4 className="text-xs font-bold text-text truncate">{reservationBook.title}</h4>
-                <p className="text-[11px] text-text-muted">{reservationBook.author}</p>
-                <span className="font-mono text-[9px] text-amber-500 font-bold block mt-0.5">
-                  🏷️ {reservationBook.callNumber || generateSlimsCallNumber(reservationBook.title, reservationBook.author, reservationBook.categoryId)}
+
+              {/* Book Info */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-surface-2 border border-border">
+                <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 border border-border bg-slate-900">
+                  <SmartBookCover
+                    title={reservationBook.title}
+                    author={reservationBook.author}
+                    coverUrl={reservationBook.coverImage}
+                    categoryId={reservationBook.categoryId}
+                    aspectRatio="h-full w-full"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-text truncate">{reservationBook.title}</h4>
+                  <p className="text-[11px] text-text-muted">{reservationBook.author}</p>
+                  <span className="font-mono text-[9px] text-amber-500 font-bold block mt-0.5">
+                    🏷️ {reservationBook.callNumber || generateSlimsCallNumber(reservationBook.title, reservationBook.author, reservationBook.categoryId)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Student Identity: Strictly Bound to Logged-in Session */}
+              <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-1">
+                <span className="text-[10px] text-purple-400 font-bold block uppercase tracking-wider">
+                  👤 Siswa Pemesan (Akun Login Anda):
                 </span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="font-extrabold text-sm text-text">{activeStudent.name}</h5>
+                    <p className="text-[11px] text-text-muted">
+                      {activeStudent.classGroup} • Kode: {activeStudent.memberCode}
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-600/20 text-purple-300 font-mono text-xs font-bold">
+                    @{activeStudent.username || activeStudent.memberCode}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-text block">
-                Pilih Siswa / Anggota Pemesan:
-              </label>
-              <select
-                value={selectedResMemberId}
-                onChange={(e) => setSelectedResMemberId(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text font-medium outline-hidden focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="">-- Pilih Nama Siswa / Guru --</option>
-                {allMembers
-                  .filter((m) => m.status !== 'GRADUATED' && m.status !== 'INACTIVE')
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.type === 'TEACHER' ? 'Guru' : m.classGroup})
-                    </option>
-                  ))}
-              </select>
-            </div>
+              {/* Desired Pickup Date Picker */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Pilih Rencana Tanggal Pengambilan Buku:</span>
+                </label>
+                <input
+                  type="date"
+                  value={desiredPickupDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setDesiredPickupDate(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-xs text-text font-medium outline-hidden focus:border-indigo-500 cursor-pointer"
+                />
+                <p className="text-[10px] text-text-muted">
+                  Buku akan disiapkan dan disimpan khusus untuk ananda saat dikembalikan.
+                </p>
+              </div>
 
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 space-y-1">
-              <p className="font-bold">Ketentuan Reservasi:</p>
-              <p>• Buku akan diprioritaskan untukmu begitu siswa peminjam mengembalikan fisik buku ke perpustakaan.</p>
-              <p>• Masa simpan di rak reservasi adalah <strong>1x24 jam</strong>. Jika tidak diambil, buku akan kembali tersedia untuk umum.</p>
-            </div>
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Ketentuan Timer Rundown 1x24 Jam:</span>
+                </p>
+                <p>• Buku diprioritaskan untukmu begitu siswa peminjam mengembalikan fisik buku ke perpustakaan.</p>
+                <p>• Masa simpan di rak reservasi adalah <strong>1x24 jam</strong> sejak buku tiba. Status dan timer countdown dapat dipantau di Tab &quot;Reservasi Saya&quot; pada Portal Siswa.</p>
+              </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsReservationModalOpen(false);
-                  setReservationBook(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-surface-2 text-text font-semibold text-xs hover:bg-surface border border-border"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!selectedResMemberId) {
-                    alert('Mohon pilih nama siswa atau guru yang melakukan reservasi!');
-                    return;
-                  }
-                  const member = allMembers.find((m) => m.id === selectedResMemberId);
-                  if (!member) return;
-
-                  const res = libraryStore.createReservation(reservationBook.id, member.id, member.name);
-                  soundFx.playSuccessChime();
-                  alert(`✅ Reservasi Berhasil!\nBuku "${reservationBook.title}" telah dipesan atas nama ${member.name}. Anda akan diprioritaskan saat buku dikembalikan!`);
-                  setIsReservationModalOpen(false);
-                  setReservationBook(null);
-                  setSelectedResMemberId('');
-                }}
-                className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md transition"
-              >
-                Konfirmasi Reservasi
-              </button>
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReservationModalOpen(false);
+                    setReservationBook(null);
+                    setDesiredPickupDate('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-surface-2 text-text font-semibold text-xs hover:bg-surface border border-border cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = libraryStore.createReservation(
+                      reservationBook.id,
+                      activeStudent.id,
+                      activeStudent.name,
+                      desiredPickupDate || undefined
+                    );
+                    soundFx.playSuccessChime();
+                    alert(
+                      `✅ Reservasi Berhasil!\n\nBuku "${reservationBook.title}" telah dipesan khusus atas nama ${activeStudent.name}.\n\n⏱️ Timer rundown 1x24 jam telah aktif dan tercatat di Portal Mandiri Siswa & Orang Tua (Tab "Reservasi Saya").`
+                    );
+                    setIsReservationModalOpen(false);
+                    setReservationBook(null);
+                    setDesiredPickupDate('');
+                  }}
+                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md transition cursor-pointer active:scale-95 flex items-center gap-1.5"
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                  Konfirmasi Reservasi
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* =========================================================================
           MODAL: CMS ARTIKEL BERITA & PENGUMUMAN PERPUSTAKAAN

@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
-import { Member, Book, Loan, LoanRules } from '@/types';
+import { Member, Book, Loan, LoanRules, Reservation } from '@/types';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
@@ -50,9 +50,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [loginError, setLoginError] = useState<string>('');
 
   // Portal tabs
-  const [activeTab, setActiveTab] = useState<'WISHLIST' | 'ACTIVE_LOANS' | 'HISTORY' | 'FINES' | 'CATALOG'>('WISHLIST');
+  const [activeTab, setActiveTab] = useState<'WISHLIST' | 'ACTIVE_LOANS' | 'RESERVATIONS' | 'HISTORY' | 'FINES' | 'CATALOG'>('WISHLIST');
   const [catalogSearch, setCatalogSearch] = useState<string>('');
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
+
+  // Live ticking clock for 1x24h countdown
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Self-service modals
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
@@ -63,6 +67,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     memberName: string;
     waUrl: string;
   } | null>(null);
+
+  // Lupa username modal state
+  const [isForgotUsernameOpen, setIsForgotUsernameOpen] = useState<boolean>(false);
+  const [forgotPhoneInput, setForgotPhoneInput] = useState<string>('');
+  const [forgotResults, setForgotResults] = useState<Member[]>([]);
 
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
   const [newPasswordVal, setNewPasswordVal] = useState<string>('');
@@ -90,6 +99,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     }
   }, [isOpen]);
 
+  // Live 1-second interval for 24h countdown ticker
+  useEffect(() => {
+    setCurrentTime(new Date());
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!isOpen) return null;
 
   const handleLogin = (e: React.FormEvent) => {
@@ -103,31 +121,30 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       setPasswordInput('');
     } else {
       soundFx.playErrorBeep();
-      setLoginError('Username atau Password belum sesuai. Silakan klik "Lupa Password? Reset Otomatis" untuk mereset.');
+      setLoginError('Username atau Password belum sesuai. Pastikan username dan password sama persis dengan yang terdaftar.');
     }
   };
 
   const handleQuickDemoLogin = (username: string) => {
-    setUsernameInput(username);
-    setPasswordInput('123');
+    const allM = libraryStore.getMembers();
+    const target = allM.find(
+      (m) =>
+        m.status !== 'GRADUATED' &&
+        m.status !== 'INACTIVE' &&
+        ((m.username || '').toLowerCase() === username.toLowerCase() ||
+          m.name.toLowerCase().includes(username.toLowerCase()))
+    );
+    if (!target) return;
+
+    const pass = (target.password || '1234').trim();
+    setUsernameInput(target.username || target.name);
+    setPasswordInput(pass);
     setLoginError('');
-    const user = libraryStore.studentLogin(username, '123');
+
+    const user = libraryStore.studentLogin(target.username || target.name, pass);
     if (user) {
       setCurrentUser(user);
       soundFx.playSuccessChime();
-    } else {
-      // Fallback search
-      const allM = libraryStore.getMembers();
-      const fallback = allM.find(
-        (m) =>
-          (m.username || '').toLowerCase() === username.toLowerCase() ||
-          m.name.toLowerCase().includes(username.toLowerCase())
-      );
-      if (fallback) {
-        libraryStore.setActiveStudentSession(fallback);
-        setCurrentUser(fallback);
-        soundFx.playSuccessChime();
-      }
     }
   };
 
@@ -208,6 +225,46 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const activeLoans = currentUser ? libraryStore.getStudentActiveLoans(currentUser.id) : [];
   const loanHistory = currentUser ? libraryStore.getStudentLoanHistory(currentUser.id) : [];
   const fineAmount = currentUser ? libraryStore.calculateStudentFineAmount(currentUser.id) : 0;
+  const userReservations = currentUser
+    ? libraryStore.getReservations().filter((r) => r.memberId === currentUser.id && r.status !== 'CANCELLED')
+    : [];
+
+  const formatCountdown = (expiryDateStr: string) => {
+    const now = currentTime ? currentTime.getTime() : 0;
+    if (!now) return { expired: false, text: 'Memuat waktu...', hours: 24, mins: 0, secs: 0 };
+    const diff = new Date(expiryDateStr).getTime() - now;
+    if (diff <= 0) return { expired: true, text: 'Waktu Simpan 1x24 Jam Telah Berakhir', hours: 0, mins: 0, secs: 0 };
+    const hours = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return {
+      expired: false,
+      text: `${hours} jam ${mins} menit ${secs} detik tersisa`,
+      hours,
+      mins,
+      secs,
+    };
+  };
+
+  const handleCancelReservation = (reservationId: string) => {
+    if (confirm('Batalkan reservasi antrean buku ini?')) {
+      libraryStore.cancelReservation(reservationId, 'Dibatalkan oleh siswa/ortu via portal mandiri');
+      soundFx.playScanBeep();
+      setRefreshTrigger((prev) => prev + 1);
+    }
+  };
+
+  const handleSearchForgotUsername = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPhoneInput.trim()) return;
+    const results = libraryStore.findMembersByParentPhone(forgotPhoneInput);
+    setForgotResults(results);
+    if (results.length > 0) {
+      soundFx.playSuccessChime();
+    } else {
+      soundFx.playErrorBeep();
+    }
+  };
 
   const filteredCatalogBooks = allBooks.filter((b) => {
     if (catalogCategory !== 'ALL' && b.categoryId !== catalogCategory) return false;
@@ -293,13 +350,23 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
                       Password
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsResetModalOpen(true)}
-                      className="text-[11px] text-purple-600 hover:text-purple-700 font-bold hover:underline"
-                    >
-                      Lupa Password?
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsForgotUsernameOpen(true)}
+                        className="text-[11px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline cursor-pointer"
+                      >
+                        Lupa Username?
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-700">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsResetModalOpen(true)}
+                        className="text-[11px] text-purple-600 hover:text-purple-700 font-bold hover:underline cursor-pointer"
+                      >
+                        Lupa Password?
+                      </button>
+                    </div>
                   </div>
                   <div className="relative">
                     <Lock className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
@@ -349,18 +416,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 </div>
               </div>
 
-              {/* Self-service Reset Password direct button */}
+              {/* Self-service Reset Password & Forgot Username direct buttons */}
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setIsResetModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                >
-                  <Phone className="h-3.5 w-3.5" />
-                  Lupa Password? Reset Otomatis Langsung ke WhatsApp Ortu (Tanpa Antri)
-                </button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotUsernameOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    Lupa Username? Kirim via WhatsApp Ortu
+                  </button>
+                  <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsResetModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                  >
+                    <Key className="h-3.5 w-3.5" />
+                    Lupa Password? Reset Mandiri
+                  </button>
+                </div>
                 <p className="text-[10px] text-slate-400">
-                  Password baru langsung terkirim ke WhatsApp Ayah/Bunda tanpa perlu menunggu konfirmasi pustakawan.
+                  Data login ananda bisa dicek dan dikirim langsung ke WhatsApp nomor HP orang tua tanpa perlu repot antre.
                 </p>
               </div>
             </div>
@@ -398,7 +476,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsChangePasswordOpen(true)}
-                  className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition hover:bg-slate-100"
+                  className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition hover:bg-slate-100 cursor-pointer"
                   title="Ubah Password Akun Siswa"
                 >
                   <Key className="h-3.5 w-3.5 text-amber-500" />
@@ -411,7 +489,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     setCloseAccountError('');
                     setIsCloseAccountOpen(true);
                   }}
-                  className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition hover:bg-rose-100"
+                  className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition hover:bg-rose-100 cursor-pointer"
                   title="Ajukan Penutupan / Penghapusan Akun"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -421,7 +499,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition"
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   Keluar
@@ -434,7 +512,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('WISHLIST')}
-                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition ${
+                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
                   activeTab === 'WISHLIST'
                     ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-700'
@@ -445,8 +523,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => setActiveTab('RESERVATIONS')}
+                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
+                  activeTab === 'RESERVATIONS'
+                    ? 'bg-white dark:bg-slate-800 text-fuchsia-600 dark:text-fuchsia-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Bookmark className="h-4 w-4 text-fuchsia-500" />
+                ⏳ Reservasi Saya ({userReservations.length})
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab('ACTIVE_LOANS')}
-                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition ${
+                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
                   activeTab === 'ACTIVE_LOANS'
                     ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-700'
@@ -458,7 +548,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('HISTORY')}
-                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition ${
+                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
                   activeTab === 'HISTORY'
                     ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-700'
@@ -471,7 +561,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('FINES')}
-                  className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition ${
+                  className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
                     activeTab === 'FINES'
                       ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
                       : 'text-slate-500 hover:text-slate-700'
@@ -484,7 +574,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('CATALOG')}
-                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition ${
+                className={`py-2 px-4 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer ${
                   activeTab === 'CATALOG'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-700'
@@ -571,6 +661,175 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                                 Hapus dari Impian
                               </button>
                             </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 1.5: RESERVASI SAYA (DENGAN TIMER RUNDOWN 1X24 JAM) */}
+              {activeTab === 'RESERVATIONS' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        Antrean Reservasi Buku Ananda
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Buku yang dipesan diprioritaskan saat dikembalikan ke perpustakaan dengan batas waktu simpan di rak 1x24 jam.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('CATALOG')}
+                      className="px-3.5 py-1.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      + Cari Buku untuk Direservasi
+                    </button>
+                  </div>
+
+                  {userReservations.length === 0 ? (
+                    <div className="p-10 text-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 space-y-3">
+                      <Bookmark className="h-10 w-10 text-fuchsia-300 mx-auto" />
+                      <p className="text-xs text-slate-500">
+                        Belum ada buku yang direservasi. Jika buku favorit sedang dipinjam teman lain, ananda bisa memesan lebih dulu agar disimpan saat dikembalikan!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('CATALOG')}
+                        className="px-4 py-2 rounded-xl bg-fuchsia-600 text-white font-bold text-xs cursor-pointer hover:bg-fuchsia-700 transition"
+                      >
+                        Buka Katalog Buku TK
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {userReservations.map((res) => {
+                        const book = allBooks.find((b) => b.id === res.bookId);
+                        const cat = categories.find((c) => c.id === book?.categoryId);
+                        const countdown = formatCountdown(res.expiryDate);
+
+                        return (
+                          <div
+                            key={res.id}
+                            className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col justify-between space-y-3"
+                          >
+                            <div className="flex gap-3 items-start">
+                              <div className="h-24 w-16 rounded-xl overflow-hidden shrink-0 shadow-xs">
+                                <SmartBookCover
+                                  title={book?.title || res.bookTitle}
+                                  author={book?.author || ''}
+                                  coverUrl={book?.coverImage}
+                                  categoryId={book?.categoryId || ''}
+                                  aspectRatio="h-full w-full"
+                                />
+                              </div>
+                              <div className="space-y-1 flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className="inline-block px-2 py-0.5 rounded-md text-[9px] font-bold text-white truncate max-w-[140px]"
+                                    style={{ backgroundColor: cat?.colorHex || '#c026d3' }}
+                                  >
+                                    {cat?.name || 'Cerita Anak'}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                                      res.status === 'READY_FOR_PICKUP'
+                                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                                        : res.status === 'PENDING'
+                                        ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'
+                                        : res.status === 'FULFILLED'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    {res.status === 'READY_FOR_PICKUP'
+                                      ? '⚡ Siap Diambil di Rak'
+                                      : res.status === 'PENDING'
+                                      ? '⏳ Dalam Antrean'
+                                      : res.status === 'FULFILLED'
+                                      ? '✅ Selesai'
+                                      : 'Dibatalkan'}
+                                  </span>
+                                </div>
+
+                                <h5 className="font-bold text-xs text-slate-800 dark:text-slate-100 line-clamp-2">
+                                  {book?.title || res.bookTitle}
+                                </h5>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {book?.author || 'Penulis Perpustakaan'}
+                                </p>
+
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 space-y-0.5 pt-1">
+                                  <div>
+                                    📅 Tanggal Reservasi:{' '}
+                                    <strong className="text-slate-700 dark:text-slate-200">
+                                      {new Date(res.requestDate).toLocaleDateString('id-ID', {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        year: 'numeric',
+                                      })}
+                                    </strong>
+                                  </div>
+                                  {res.desiredPickupDate && (
+                                    <div>
+                                      🎯 Rencana Ambil:{' '}
+                                      <strong className="text-purple-600 dark:text-purple-400">
+                                        {new Date(res.desiredPickupDate).toLocaleDateString('id-ID', {
+                                          day: 'numeric',
+                                          month: 'short',
+                                          year: 'numeric',
+                                        })}
+                                      </strong>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Rundown Timer 1x24 Jam Box */}
+                            {res.status === 'READY_FOR_PICKUP' ? (
+                              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-1">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                                  <Clock className="h-4 w-4 animate-spin text-amber-500" />
+                                  <span>Buku Siap di Rak Reservasi Perpustakaan!</span>
+                                </div>
+                                <div className="font-mono text-sm font-black text-amber-700 dark:text-amber-300">
+                                  ⏳ Sisa Waktu Simpan (1x24 Jam): {countdown.text}
+                                </div>
+                                <p className="text-[10px] text-slate-500 leading-tight">
+                                  Silakan datang ke meja pustakawan sebelum waktu habis. Jika lewat 24 jam, buku otomatis tersedia kembali untuk umum.
+                                </p>
+                              </div>
+                            ) : res.status === 'PENDING' ? (
+                              <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 space-y-1">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400">
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  <span>Menunggu Buku Dikembalikan Peminjam Sebelumnya</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                                  Ananda mendapat prioritas pertama. Saat buku diserahkan ke perpustakaan, hitungan mundur 1x24 jam akan langsung dimulai dan buku disisihkan.
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {/* Cancel button if pending or ready */}
+                            {(res.status === 'PENDING' || res.status === 'READY_FOR_PICKUP') && (
+                              <div className="flex justify-end pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelReservation(res.id)}
+                                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Batalkan Reservasi
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1014,6 +1273,150 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md"
               >
                 Konfirmasi Tutup Akun
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-MODAL 4: LUPA USERNAME VIA WHATSAPP ORTU */}
+      {isForgotUsernameOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Phone className="h-5 w-5 text-emerald-500" />
+                <span>Cari Username & Kirim ke WhatsApp Ortu</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setIsForgotUsernameOpen(false);
+                  setForgotResults([]);
+                  setForgotPhoneInput('');
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSearchForgotUsername} className="space-y-4 text-xs">
+              <p className="text-slate-500 leading-relaxed">
+                Ketik nomor WhatsApp Ayah/Bunda yang terdaftar saat registrasi siswa. Sistem akan menampilkan username login ananda dan tautan kirim langsung ke WhatsApp.
+              </p>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Nomor WhatsApp Orang Tua:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: 08123456789 atau 628..."
+                    value={forgotPhoneInput}
+                    onChange={(e) => setForgotPhoneInput(e.target.value)}
+                    className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-xs text-slate-800 dark:text-slate-100 outline-hidden focus:border-emerald-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs shadow-md shrink-0 cursor-pointer"
+                  >
+                    Cari Akun
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Results */}
+            {forgotResults.length > 0 && (
+              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800 max-h-60 overflow-y-auto pr-1">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Ditemukan {forgotResults.length} siswa dengan nomor WhatsApp ini:
+                </p>
+                {forgotResults.map((m) => {
+                  const cleanPhone = (m.parentPhone || '').replace(/\D/g, '').replace(/^0/, '62');
+                  const waMsg = encodeURIComponent(
+                    `Halo Ayah/Bunda ${m.parentName || ''},\n\nBerikut data login Portal Perpustakaan SBTH untuk Ananda:\n` +
+                      `👤 *Nama:* ${m.name}\n` +
+                      `🏷️ *Kelas:* ${m.classGroup}\n` +
+                      `🔑 *Username:* ${m.username || m.memberCode}\n` +
+                      `🔒 *Password Default:* ${m.password || '1234'}\n\n` +
+                      `Buka portal perpustakaan di browser dan masukkan username serta password di atas. Terima kasih!`
+                  );
+                  const waLink = `https://wa.me/${cleanPhone}?text=${waMsg}`;
+
+                  return (
+                    <div
+                      key={m.id}
+                      className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2 text-xs"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h5 className="font-extrabold text-slate-800 dark:text-slate-100">{m.name}</h5>
+                          <p className="text-[11px] text-slate-500">
+                            {m.classGroup} • Kode: {m.memberCode}
+                          </p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold text-[10px]">
+                          @{m.username || m.memberCode}
+                        </span>
+                      </div>
+
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-700 flex items-center justify-between text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">Username Login:</span>
+                          <strong className="text-purple-600 dark:text-purple-400 font-mono text-xs">
+                            {m.username || m.memberCode}
+                          </strong>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUsernameInput(m.username || m.memberCode);
+                            setPasswordInput(m.password || '1234');
+                            setIsForgotUsernameOpen(false);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold text-[10px] cursor-pointer"
+                        >
+                          Gunakan Login
+                        </button>
+                      </div>
+
+                      {cleanPhone && (
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          Kirim Data Akun ke WhatsApp ({m.parentPhone})
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {forgotResults.length === 0 && forgotPhoneInput && (
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs">
+                Nomor WhatsApp belum cocok dengan data siswa aktif. Pastikan nomor yang diinput sama dengan nomor saat pendaftaran anggota.
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotUsernameOpen(false);
+                  setForgotResults([]);
+                  setForgotPhoneInput('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

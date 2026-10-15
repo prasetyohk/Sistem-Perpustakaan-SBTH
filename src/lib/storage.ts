@@ -506,6 +506,30 @@ export class LibraryStore {
     return this.getMembers().find((m) => m.memberCode.toUpperCase() === clean);
   }
 
+  public isUsernameTaken(username: string, excludeId?: string): boolean {
+    if (!username || !username.trim()) return false;
+    const clean = username.trim().toLowerCase();
+    const members = this.getMembers();
+    return members.some((m) => {
+      if (excludeId && m.id === excludeId) return false;
+      // Only active members hold usernames; graduated/inactive usernames are reusable
+      if (m.status === 'GRADUATED' || m.status === 'INACTIVE') return false;
+      return (m.username || '').trim().toLowerCase() === clean;
+    });
+  }
+
+  public findMembersByParentPhone(phone: string): Member[] {
+    if (!phone || !phone.trim()) return [];
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 4) return [];
+    const members = this.getMembers();
+    return members.filter((m) => {
+      if (m.status === 'GRADUATED' || m.status === 'INACTIVE') return false;
+      const p = (m.parentPhone || '').replace(/[^0-9]/g, '');
+      return p && (p.includes(cleanPhone) || cleanPhone.includes(p));
+    });
+  }
+
   public addMember(memberData: Omit<Member, 'id' | 'memberCode'>): Member {
     const members = this.getMembers();
     const code = `SBTH-M-${(members.length + 20).toString().padStart(4, '0')}`;
@@ -513,6 +537,8 @@ export class LibraryStore {
       ...memberData,
       id: `m-${Date.now().toString(36)}`,
       memberCode: code,
+      password: (memberData.password || '1234').trim(),
+      username: (memberData.username || memberData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')).trim(),
     };
     this.saveMembers([...members, newMember]);
     return newMember;
@@ -1174,7 +1200,7 @@ Periode: Minggu ke-2 Oktober 2026
  └─ ❌ Buku Hilang: ${hilangItems.length} Eks
 
 💰 KAS DENDA & PENGGANTIAN
- ├─ 💵 Infaq Keterlambatan Masuk: Rp ${fines.dendaTerlambat.toLocaleString('id-ID')}
+ ├─ 💵 Denda Keterlambatan Masuk: Rp ${fines.dendaTerlambat.toLocaleString('id-ID')}
  ├─ 🔄 Ganti Rugi Buku Rusak/Hilang: Rp ${fines.gantiRusakHilang.toLocaleString('id-ID')}
  ├─ 🎁 Sumbangan Kas Tunai: Rp ${fines.sumbanganTunai.toLocaleString('id-ID')}
  └─ ⏳ Tunggakan Belum Lunas: Rp ${fines.tunggakanBelumLunas.toLocaleString('id-ID')} (${fines.unpaidCount} Siswa)
@@ -1865,54 +1891,40 @@ Periode: Minggu ke-2 Oktober 2026
   public studentLogin(usernameOrCode: string, password?: string): Member | null {
     if (!usernameOrCode || !usernameOrCode.trim()) return null;
     const rawClean = usernameOrCode.trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+    if (!cleanPass) return null; // Password wajib diisi
+
     // Strip parentheses, e.g. "Alvaro (TK-A)" -> "alvaro", or emojis
     const normalizedInput = rawClean.replace(/[\(\)\[\]\-_]/g, ' ').trim();
     const firstWord = normalizedInput.split(/\s+/)[0];
-    const cleanPass = (password || '').trim();
     const members = this.getMembers();
 
     const member = members.find((m) => {
+      // Exclude graduated or inactive
+      if (m.status === 'GRADUATED' || m.status === 'INACTIVE') return false;
+
       const u = (m.username || '').toLowerCase().trim();
       const c = (m.memberCode || '').toLowerCase().trim();
       const n = (m.name || '').toLowerCase().trim();
       const firstName = n.split(/\s+/)[0];
 
-      // Exact match on username or memberCode
+      // Match on username or memberCode
       if (u && (u === rawClean || u === normalizedInput || u === firstWord)) return true;
       if (c && (c === rawClean || c === normalizedInput)) return true;
 
-      // Match on full name or first name
+      // Match on full name or exact first name
       if (n && (n === rawClean || n === normalizedInput)) return true;
-      if (firstName && firstName.length >= 3) {
-        if (firstName === firstWord || normalizedInput.includes(firstName) || n.includes(firstWord)) {
-          return true;
-        }
-      }
+      if (firstName && firstName.length >= 3 && firstName === firstWord) return true;
 
       return false;
     });
 
     if (!member) return null;
 
-    // Password verification: accept valid password, standard demo passwords (123, 1234, sbth, sbth2026),
-    // or if password is empty/default, allow access so parents and young learners are never blocked.
-    if (member.password && cleanPass) {
-      if (
-        member.password === cleanPass ||
-        cleanPass === '123' ||
-        cleanPass === '1234' ||
-        cleanPass === 'sbth' ||
-        cleanPass === 'sbth2026' ||
-        cleanPass.length === 3 // allows any 3-digit pin like '123'
-      ) {
-        this.setActiveStudentSession(member);
-        return member;
-      }
-      // If user provided a password that didn't match, also fall back to allowing access if it starts with 1
-      if (cleanPass.startsWith('1')) {
-        this.setActiveStudentSession(member);
-        return member;
-      }
+    // Strict Password Verification:
+    // Password harus sama persis dengan yang terdaftar (atau default '1234')
+    const expectedPassword = (member.password || '1234').trim();
+    if (cleanPass !== expectedPassword) {
       return null;
     }
 
@@ -2418,7 +2430,8 @@ Periode: Minggu ke-2 Oktober 2026
   public createReservation(
     bookId: string,
     memberId: string,
-    handledBy: string = 'Mandiri'
+    handledBy: string = 'Mandiri',
+    desiredPickupDate?: string
   ): { success: boolean; message: string; reservation?: Reservation } {
     if (!this.isClient()) return { success: false, message: 'Server environment' };
     const book = this.getBooks().find((b) => b.id === bookId);
@@ -2459,6 +2472,7 @@ Periode: Minggu ke-2 Oktober 2026
       parentPhone: member.parentPhone,
       requestDate: now.toISOString(),
       expiryDate: expiry.toISOString(),
+      desiredPickupDate: desiredPickupDate || now.toISOString().split('T')[0],
       status: 'PENDING',
       handledBy,
     };
@@ -2570,6 +2584,109 @@ Periode: Minggu ke-2 Oktober 2026
     pattern.nextNumber += 1;
     this.saveSlimsPattern(pattern);
     return barcode;
+  }
+
+  // --- REGENERASI MASSAL BARCODE SLIMS SESUAI PRESET (DENGAN BACKUP & RESTORE) ---
+  public reindexAllBookBarcodes(newPattern?: SlimsPatternConfig): { success: boolean; count: number; nextNumber: number; backupKey: string } {
+    if (!this.isClient()) return { success: false, count: 0, nextNumber: 0, backupKey: '' };
+    const items = this.getBookItems();
+    if (items.length === 0) return { success: true, count: 0, nextNumber: 1, backupKey: '' };
+
+    // Simpan snapshot cadangan sebelum merubah agar bisa dibatalkan / di-undo
+    const backupSnapshot = JSON.stringify(items);
+    localStorage.setItem('SBTH_BACKUP_BOOK_ITEMS_BEFORE_REINDEX', backupSnapshot);
+    localStorage.setItem('SBTH_BACKUP_BOOK_ITEMS_TIMESTAMP', new Date().toISOString());
+
+    const pattern = newPattern || this.getSlimsPattern();
+    let currentNumber = pattern.nextNumber || 1;
+    const books = this.getBooks();
+    const barcodeMap: Record<string, string> = {};
+
+    const updatedItems = items.map((item) => {
+      let prefix = pattern.prefix || 'B';
+      if (pattern.patternMode === 'SLIMS_STANDARD') {
+        prefix = 'B';
+      } else if (pattern.patternMode === 'CATEGORY_BASED') {
+        const book = books.find((b) => b.id === item.bookId);
+        const catCode = book?.categoryId ? book.categoryId.replace('cat-', '').substring(0, 3).toUpperCase() : 'B';
+        prefix = `${catCode}-`;
+      } else if (pattern.patternMode === 'SBTH') {
+        prefix = 'SBTH-B-';
+      }
+
+      const numStr = String(currentNumber).padStart(pattern.serialLength || 5, '0');
+      const suffix = pattern.suffix || '';
+      const newBarcode = `${prefix}${numStr}${suffix}`;
+      currentNumber++;
+
+      barcodeMap[item.itemBarcode] = newBarcode;
+      return {
+        ...item,
+        itemBarcode: newBarcode,
+      };
+    });
+
+    this.saveBookItems(updatedItems);
+
+    // Sinkronisasi record peminjaman aktif agar barcode baru tetap cocok
+    const loans = this.getLoans();
+    let loansChanged = false;
+    const updatedLoans = loans.map((loan) => {
+      let modified = false;
+      const newLoanItems = loan.items.map((li) => {
+        if (barcodeMap[li.itemBarcode]) {
+          modified = true;
+          return { ...li, itemBarcode: barcodeMap[li.itemBarcode] };
+        }
+        return li;
+      });
+      if (modified) {
+        loansChanged = true;
+        return { ...loan, items: newLoanItems };
+      }
+      return loan;
+    });
+    if (loansChanged) {
+      this.saveLoans(updatedLoans);
+    }
+
+    // Perbarui nomor urut berikutnya di pola
+    pattern.nextNumber = currentNumber;
+    this.saveSlimsPattern(pattern);
+
+    this.addActivityLog({
+      category: 'CATALOG',
+      action: 'MASS_REINDEX_BARCODES',
+      actor: 'Pustakawan',
+      details: `Regenerasi massal ${items.length} kode barcode eksemplar buku ke format ${pattern.patternMode}.`,
+    });
+
+    return { success: true, count: items.length, nextNumber: currentNumber, backupKey: 'SBTH_BACKUP_BOOK_ITEMS_BEFORE_REINDEX' };
+  }
+
+  public restorePreviousBookBarcodes(): { success: boolean; count: number; message: string } {
+    if (!this.isClient()) return { success: false, count: 0, message: 'Server environment' };
+    const raw = localStorage.getItem('SBTH_BACKUP_BOOK_ITEMS_BEFORE_REINDEX');
+    if (!raw) {
+      return { success: false, count: 0, message: 'Tidak ada data backup barcode sebelumnya untuk dipulihkan.' };
+    }
+    try {
+      const restoredItems: BookItem[] = JSON.parse(raw);
+      this.saveBookItems(restoredItems);
+      localStorage.removeItem('SBTH_BACKUP_BOOK_ITEMS_BEFORE_REINDEX');
+      return {
+        success: true,
+        count: restoredItems.length,
+        message: `Berhasil mengembalikan ${restoredItems.length} kode barcode ke kondisi sebelum regenerasi.`,
+      };
+    } catch {
+      return { success: false, count: 0, message: 'Gagal memproses data pemulihan backup.' };
+    }
+  }
+
+  public hasReindexBackup(): boolean {
+    if (!this.isClient()) return false;
+    return !!localStorage.getItem('SBTH_BACKUP_BOOK_ITEMS_BEFORE_REINDEX');
   }
 
   // --- SISTEM MANAJEMEN KONTEN (CMS BERITA & PENGUMUMAN) ---

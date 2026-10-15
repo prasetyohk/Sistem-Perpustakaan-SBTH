@@ -613,6 +613,7 @@ export default function Home() {
               setActiveTab('CIRCULATION');
             }}
             onOpenScanIsbn={() => setIsScanIsbnOpen(true)}
+            onOpenStudentPortal={() => setIsStudentPortalOpen(true)}
           />
         )}
 

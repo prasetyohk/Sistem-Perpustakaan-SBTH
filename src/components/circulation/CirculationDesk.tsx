@@ -318,6 +318,7 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
     const q = memberSearch.toLowerCase();
     return (
       m.name.toLowerCase().includes(q) ||
+      (m.username || '').toLowerCase().includes(q) ||
       m.memberCode.toLowerCase().includes(q) ||
       m.classGroup.toLowerCase().includes(q)
     );
@@ -513,7 +514,7 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
                         type="text"
                         value={memberSearch}
                         onChange={(e) => setMemberSearch(e.target.value)}
-                        placeholder="Cari nama siswa atau kelas..."
+                        placeholder="Cari nama siswa, username, atau kelas..."
                         className="w-full rounded-xl border border-border bg-surface-2 pl-9 pr-3 py-1.5 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
                       />
                     </div>
@@ -540,6 +541,7 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
                               {member.name}
                             </p>
                             <p className="text-[10px] text-text-muted truncate">
+                              {member.username ? `@${member.username} • ` : ''}
                               {member.type === 'TEACHER' ? 'Guru' : member.classGroup}
                             </p>
                           </div>
@@ -833,77 +835,86 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
                   <span className="text-[11px] text-text-muted">Cari nama / kelas</span>
                 </div>
 
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-text-muted" />
-                  <input
-                    type="text"
-                    value={renewSearch}
-                    onChange={(e) => setRenewSearch(e.target.value)}
-                    placeholder="Ketik nama siswa atau kelas..."
-                    className="w-full rounded-xl border border-border bg-surface-2 pl-9 pr-3 py-1.5 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-text-muted" />
+                    <input
+                      type="text"
+                      value={renewSearch}
+                      onChange={(e) => setRenewSearch(e.target.value)}
+                      placeholder="Ketik nama siswa, username, atau kelas..."
+                      className="w-full rounded-xl border border-border bg-surface-2 pl-9 pr-3 py-1.5 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
 
-                {/* Member Search Grid / Selection */}
-                {renewSelectedMember ? (
-                  <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4 space-y-3 relative">
-                    <button
-                      type="button"
-                      onClick={() => setRenewSelectedMember(null)}
-                      className="absolute top-3 right-3 text-xs text-text-muted hover:text-amber-500 font-semibold"
-                    >
-                      Ganti Anggota
-                    </button>
-                    <div className="flex items-center gap-3">
-                      <Avatar name={renewSelectedMember.name} src={renewSelectedMember.photoUrl} size="md" shape="rounded" />
-                      <div>
-                        <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/15 px-1.5 py-0.5 rounded">
-                          {renewSelectedMember.memberCode}
-                        </span>
-                        <h4 className="text-sm font-bold text-text mt-0.5">{renewSelectedMember.name}</h4>
-                        <p className="text-xs text-text-muted">
-                          {renewSelectedMember.type === 'TEACHER' ? 'Guru' : renewSelectedMember.classGroup}
-                        </p>
+                  {/* Member Search Grid / Selection */}
+                  {renewSelectedMember ? (
+                    <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4 space-y-3 relative">
+                      <button
+                        type="button"
+                        onClick={() => setRenewSelectedMember(null)}
+                        className="absolute top-3 right-3 text-xs text-text-muted hover:text-amber-500 font-semibold"
+                      >
+                        Ganti Anggota
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <Avatar name={renewSelectedMember.name} src={renewSelectedMember.photoUrl} size="md" shape="rounded" />
+                        <div>
+                          <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                            {renewSelectedMember.memberCode}
+                          </span>
+                          <h4 className="text-sm font-bold text-text mt-0.5">{renewSelectedMember.name}</h4>
+                          <p className="text-xs text-text-muted">
+                            {renewSelectedMember.username ? `@${renewSelectedMember.username} • ` : ''}
+                            {renewSelectedMember.type === 'TEACHER' ? 'Guru' : renewSelectedMember.classGroup}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-                    {members
-                      .filter((m) => {
-                        if (m.status === 'GRADUATED') return false;
-                        if (!renewSearch.trim()) return true;
-                        const q = renewSearch.toLowerCase();
-                        return m.name.toLowerCase().includes(q) || m.classGroup.toLowerCase().includes(q) || m.memberCode.toLowerCase().includes(q);
-                      })
-                      .map((m) => {
-                        const hasActive = loans.some((l) => l.memberId === m.id && (l.status === 'ACTIVE' || l.status === 'OVERDUE'));
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              setRenewSelectedMember(m);
-                              soundFx.playScanBeep();
-                            }}
-                            className={`p-2 rounded-xl border text-left flex items-center gap-2 transition ${
-                              hasActive
-                                ? 'border-amber-500/40 bg-surface-2 hover:bg-surface'
-                                : 'border-border bg-surface-2/60 opacity-60 hover:opacity-100'
-                            }`}
-                          >
-                            <Avatar name={m.name} src={m.photoUrl} size="sm" shape="circle" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-text truncate">{m.name}</p>
-                              <span className={`text-[10px] font-bold ${hasActive ? 'text-amber-500' : 'text-text-muted'}`}>
-                                {hasActive ? 'Ada Pinjaman' : '0 Pinjaman'}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                      {members
+                        .filter((m) => {
+                          if (m.status === 'GRADUATED') return false;
+                          if (!renewSearch.trim()) return true;
+                          const q = renewSearch.toLowerCase();
+                          return (
+                            m.name.toLowerCase().includes(q) ||
+                            (m.username || '').toLowerCase().includes(q) ||
+                            m.classGroup.toLowerCase().includes(q) ||
+                            m.memberCode.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((m) => {
+                          const hasActive = loans.some((l) => l.memberId === m.id && (l.status === 'ACTIVE' || l.status === 'OVERDUE'));
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setRenewSelectedMember(m);
+                                soundFx.playScanBeep();
+                              }}
+                              className={`p-2 rounded-xl border text-left flex items-center gap-2 transition ${
+                                hasActive
+                                  ? 'border-amber-500/40 bg-surface-2 hover:bg-surface'
+                                  : 'border-border bg-surface-2/60 opacity-60 hover:opacity-100'
+                              }`}
+                            >
+                              <Avatar name={m.name} src={m.photoUrl} size="sm" shape="circle" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-text truncate">{m.name}</p>
+                                <p className="text-[10px] text-text-muted truncate">
+                                  {m.username ? `@${m.username}` : m.classGroup}
+                                </p>
+                                <span className={`text-[10px] font-bold ${hasActive ? 'text-amber-500' : 'text-text-muted'}`}>
+                                  {hasActive ? 'Ada Pinjaman' : '0 Pinjaman'}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
               </div>
             </div>
 

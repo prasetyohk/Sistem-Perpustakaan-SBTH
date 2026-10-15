@@ -5,206 +5,252 @@
 ---
 
 ## 📑 Daftar Isi
-1. [Tentang Sistem & Arsitektur](#1-tentang-sistem--arsitektur)
-2. [Instalasi Cepat & Penggunaan Multi-PC LAN Jaringan Sekolah](#2-instalasi-cepat--penggunaan-multi-pc-lan-jaringan-sekolah)
-3. [Katalog Visual Anak (OPAC) & Fitur Anti-Scroll Fatigue](#3-katalog-visual-anak-opac--fitur-anti-scroll-fatigue)
-4. [Sistem Reservasi / Booking Buku (Hold 1x24 Jam)](#4-sistem-reservasi--booking-buku-hold-1x24-jam)
-5. [Sirkulasi & Modul Perpanjangan Masa Pinjam (Renewal)](#5-sirkulasi--modul-perpanjangan-masa-pinjam-renewal)
-6. [Aturan Peminjaman Fleksibel (Loan Rules)](#6-aturan-peminjaman-fleksibel-loan-rules)
-7. [Standarisasi Penamaan SLiMS: Barcode & Call Number 3-Baris](#7-standarisasi-penamaan-slims-barcode--call-number-3-baris)
-8. [Ekspor Koleksi Format SLiMS CSV & Excel](#8-ekspor-koleksi-format-slims-csv--excel)
-9. [Sistem Manajemen Konten (CMS Warta & Pengumuman)](#9-sistem-manajemen-konten-cms-warta--pengumuman)
-10. [Stock Opname (Cacah Ulang Koleksi Fisik Rak)](#10-stock-opname-cacah-ulang-koleksi-fisik-rak)
-11. [Dukungan Perangkat Keras & Kontak Pengembang](#11-dukungan-perangkat-keras--kontak-pengembang)
+1. [Instalasi Apa Saja yang Dibutuhkan](#1-instalasi-apa-saja-yang-dibutuhkan)
+2. [Mode 1-Klik Jalankan Aplikasi (Ikon Desktop Resmi)](#2-mode-1-klik-jalankan-aplikasi-ikon-desktop-resmi)
+3. [Menghubungkan Komputer Pusat & Komputer Klien (Multi-PC LAN)](#3-menghubungkan-komputer-pusat--komputer-klien-multi-pc-lan)
+4. [Keamanan Tingkat Tinggi (Anti Bocor Data & Proteksi PIN)](#4-keamanan-tingkat-tinggi-anti-bocor-data--proteksi-pin)
+5. [Aktivasi & Masuk ke Mode Pustakawan (Admin PIN: 1234 & sbth2026)](#5-aktivasi--masuk-ke-mode-pustakawan-admin-pin-1234--sbth2026)
+6. [Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)](#6-sirkulasi-peminjaman--perpanjangan-pencarian-nama--username)
+7. [Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)](#7-manajemen-anggota-username-unik--pemakaian-ulang-akun)
+8. [Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)](#8-lupa-username--password-siswa-kirim-langsung-ke-whatsapp-ortu)
+9. [Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)](#9-mode-reservasi-mandiri-siswa-timer-rundown-1x24-jam)
+10. [Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)](#10-panduan-penggunaan-format-slims--barcode-4-langkah-mudah)
+11. [Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)](#11-penomoran-ulang-massal-barcode--fitur-pemulihan-restore)
+12. [CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)](#12-cms-warta--pengumuman-multi-disematkan-auto-carousel)
+13. [Ekspor Cadangan Master Excel & SLiMS CSV](#13-ekspor-cadangan-master-excel--slims-csv)
+14. [Kontak Bantuan Teknis](#14-kontak-bantuan-teknis)
 
 ---
 
-## 1. Tentang Sistem & Arsitektur
+## 1. Instalasi Apa Saja yang Dibutuhkan
 
-Perpustakaan Digital KB-TK Bhakti Tunas Harapan (SBTH) adalah sistem informasi manajemen perpustakaan modern yang menggabungkan:
-- Standarisasi kepustakawanan nasional dan **SLiMS (Senayan Library Management System 9 Bulian)**.
-- Antarmuka visual yang menyenangkan (*playful child-friendly*), trilingual (Indonesia, Inggris, Mandarin), dan responsif.
-- Arsitektur modern berbasis web lokal (Next.js 16 PWA) tanpa ketergantungan pada database SQL tradisional yang berat, sehingga tidak rentan rusak (*corrupt*) dan siap digunakan tanpa konfigurasi server yang rumit.
+Sebelum memulai, pastikan komputer memiliki perangkat lunak dasar berikut:
+1. **Node.js versi 18 atau lebih baru (LTS disarankan):**
+   - Download gratis di [https://nodejs.org/](https://nodejs.org/) (pilih versi *LTS Recommended for Most Users*).
+   - Jalankan installer dan klik *Next* sampai selesai.
+2. **Browser Modern:**
+   - Google Chrome atau Microsoft Edge (bawaan Windows).
+3. **Jaringan Wi-Fi / Router Sekolah:**
+   - Diperlukan agar komputer server dan komputer klien/laptop guru berada dalam satu jaringan lokal yang sama.
+   - **TIDAK memerlukan internet berkecepatan tinggi** untuk operasional lokal sehari-hari.
 
 ---
 
-## 2. Instalasi Cepat & Penggunaan Multi-PC LAN Jaringan Sekolah
+## 2. Mode 1-Klik Jalankan Aplikasi (Ikon Desktop Resmi)
 
-### Cara Menjalankan di Komputer Utama (PC Server Perpustakaan)
+Aplikasi telah dilengkapi pembuat jalan pintas (*desktop shortcut*) berikon logo resmi KB-TK Bhakti Tunas Harapan (`public/app_icon.ico`):
+
+### Cara Memasang Ikon ke Layar Desktop Windows:
 1. Buka folder aplikasi di Windows Explorer.
-2. Klik ganda file:
+2. Klik 2x file:
    ```text
-   start_server_lan.bat
+   PASANG_SHORTCUT_DESKTOP.bat
    ```
-3. Jendela hitam command prompt akan otomatis mendeteksi alamat IP komputer Anda dan menyalakan server.
-4. Browser akan otomatis terbuka menampilkan aplikasi di alamat:
-   ```text
-   http://localhost:3000
-   ```
+3. Sistem secara otomatis membuat **2 Ikon Resmi** di Desktop Windows Anda:
+   - 🎒 **Perpustakaan SBTH TK (Pusat)** ➔ untuk Komputer Server / Meja Pustakawan Utama.
+   - 💻 **Perpustakaan SBTH (PC Klien)** ➔ untuk Laptop Guru, Pojok Baca, atau PC Klien lain.
 
-### Cara Membuka dari PC Lain / Laptop Guru / Tablet Siswa (Multi-PC LAN)
-Agar guru di ruang kelas atau siswa di pojok baca bisa membuka katalog bersamaan:
-1. Pastikan komputer server dan laptop/tablet lain terhubung ke **jaringan Wi-Fi / LAN yang sama**.
-2. Pada laptop/tablet lain, buka Google Chrome, Microsoft Edge, atau Safari.
-3. Ketik alamat IP komputer server yang tertera di layar `start_server_lan.bat`, contohnya:
-   ```text
-   http://192.168.1.50:3000
-   ```
-4. Aplikasi langsung terbuka dengan kecepatan maksimal tanpa hambatan!
-
-### 🛡️ Cara Mencegah Tabrakan Data (Concurrency & Collision-Free)
-- Setiap transaksi peminjaman, perpanjangan, pengembalian, dan reservasi dilengkapi dengan ID unik bertimestamp mikrodetik (`res-timestamp`, `loan-timestamp`).
-- Penomoran eksemplar otomatis (*Pattern Generator*) menggunakan nomor urut terpusat (*auto-increment*), sehingga tidak akan menghasilkan barcode ganda.
-- Setiap aktivitas tercatat secara kronologis di **Audit Activity Log** yang dapat dipantau oleh Pustakawan Utama.
+### Cara Menjalankan dengan 1-Klik:
+- **Di Komputer Pusat:** Cukup klik 2x ikon **Perpustakaan SBTH TK (Pusat)** di Desktop. Server langsung menyala, mendeteksi IP lokal, dan browser terbuka otomatis dalam 4 detik. Selesai!
+- **Di PC Klien / Guru:** Klik 2x ikon **Perpustakaan SBTH (PC Klien)** di Desktop untuk langsung tersambung ke Server Pusat.
 
 ---
 
-## 3. Katalog Visual Anak (OPAC) & Fitur Anti-Scroll Fatigue
+## 3. Menghubungkan Komputer Pusat & Komputer Klien (Multi-PC LAN)
 
-Tata letak katalog telah direkayasa ulang agar memangkas jarak gulir vertikal (*scroll fatigue*) sehingga anak dan orang tua langsung menemukan buku yang dicari:
+Sistem ini didesain agar satu server di perpustakaan dapat melayani banyak komputer guru dan tablet siswa sekaligus tanpa perlu instalasi rumit:
 
-### 1. Blok Sorotan Tabbed Carousel (Hemat 65% Ruang Layar)
-Tiga baris kartu vertikal (*Buku Baru*, *Paling Sering Dipinjam*, dan *Rekomendasi Usia*) disatukan menjadi **1 Blok Tabbed Carousel**:
-- `[ ✨ Baru Masuk ]`: Menampilkan buku-buku cerita terbaru.
-- `[ 🏆 Paling Sering Dipinjam ]`: Menampilkan buku paling diminati anak lengkap dengan medali peringkat.
-- `[ 👶 Sesuai Usia ]`: Rekomendasi buku terbagi untuk Toddler, Nursery, TK-A, dan TK-B.
-- **Tombol Akordeon `[ Sembunyikan Sorotan ▲ ]`**: Dapat diklik untuk menutup blok sorotan menjadi baris tipis ringkas.
+```
+                     ┌───────────────────────────────────┐
+                     │    ROUTER WI-FI / LAN SEKOLAH     │
+                     └─────────────────┬─────────────────┘
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         │                             │                             │
+         ▼                             ▼                             ▼
+┌───────────────────┐         ┌───────────────────┐         ┌───────────────────┐
+│ KOMPUTER PUSAT    │         │ PC KLIEN GURU 1   │         │ TABLET KIOSK OPAC │
+│ (Server Aktif)    │         │ (Buka Web Klien)  │         │ (Buka Web Klien)  │
+│ 192.168.1.13:3000 │         │ 192.168.1.13:3000 │         │ 192.168.1.13:3000 │
+└───────────────────┘         └───────────────────┘         └───────────────────┘
+```
 
-### 2. Kategori Rak Buku Model Pills (Kapsul Horizontal)
-Kategori rak kini berbentuk kapsul horizontal tepat di atas katalog buku. Klik salah satu kategori (misal: *🌿 Alam & Sains* atau *⭐ Dongeng & Fabel*) untuk menyaring buku secara instan.
-
-### 3. Perilaku Pintar Saat Mencari & Mode Daftar List
-- **Auto-Collapse saat Mengetik:** Begitu mengetik di kolom pencarian atau mengeklik chip topik, seluruh sorotan atas otomatis ter-minimize sehingga hasil buku langsung naik ke hadapan pengguna.
-- **Mode Daftar List (Compact Row):**
-  - Menggantikan ikon emoji lama dengan **Mini-Thumbnail Cover Asli (48x64 px, rasio 3:4)**.
-  - Menampilkan badge **Nomor Panggil SLiMS** (`398.2 TIM d`).
-  - Baris buku padat (tinggi 75-85px) sehingga satu layar dapat memuat 6-8 judul sekaligus.
-  - Ketika beralih ke Mode List, blok sorotan atas otomatis ter-minimize menjadi baris akordeon rapi.
-
----
-
-## 4. Sistem Reservasi / Booking Buku (Hold 1x24 Jam)
-
-Jika seluruh eksemplar suatu buku sedang dipinjam:
-1. Tombol **`[ 📌 Booking / Reservasi Buku ]`** akan otomatis muncul pada kartu dan baris detail buku.
-2. Pengunjung/siswa cukup mengeklik tombol tersebut dan memilih nama anggota.
-3. Buku langsung masuk ke antrean reservasi dengan status **PENDING**.
-4. **Saat Buku Dikembalikan di Meja Sirkulasi:**
-   - Sistem membunyikan nada perhatian dan memunculkan banner peringatan:  
-     `🔔 BUKU TELAH DI-RESERVASI OLEH: [Nama Siswa] ([Kelas])`.
-   - Buku tersebut otomatis diamankan dengan status **READY_FOR_PICKUP** selama **1x24 Jam** (dapat diatur di panel pengaturan).
-   - Buku tidak akan dapat dipinjam oleh siswa lain selama masa tunggu tersebut.
+### Langkah Mudah:
+1. **Nyalakan Komputer Pusat:**
+   - Klik 2x `JALANKAN_PERPUSTAKAAN_PUSAT.bat` atau shortcut di Desktop.
+   - Di layar hitam akan tertulis alamat IP komputer pusat, contoh:
+     ```text
+     Aplikasi Perpustakaan SBTH siap diakses:
+     1. Komputer Pusat ini : http://localhost:3000
+     2. PC Lain / HP Guru  : http://192.168.1.13:3000
+     ```
+2. **Buka dari PC Lain / Laptop Guru:**
+   - Klik 2x `BUKA_PERPUSTAKAAN_KLIEN.bat`.
+   - Sistem akan langsung membuka alamat IP server pusat yang tersimpan otomatis di `IP_SERVER_PUSAT.txt`.
+   - Guru dan siswa dapat langsung mencari buku, meminjam, dan mengecek akun secara bersamaan!
 
 ---
 
-## 5. Sirkulasi & Modul Perpanjangan Masa Pinjam (Renewal)
+## 4. Keamanan Tingkat Tinggi (Anti Bocor Data & Proteksi PIN)
 
-Meja Sirkulasi Pustakawan kini memiliki **5 Tab Utama**:
-1. **Peminjaman Baru:**
-   - Pilih anggota (Scan barcode kartu atau cari nama).
-   - Scan barcode buku fisik (contoh: `SBTH-B-00101` atau `B00101`).
-   - **Pilihan Durasi Fleksibel:** Dropdown durasi peminjaman:
-     - `3 Hari (Kilat)`
-     - `7 Hari (1 Minggu)` — *Default Siswa*
-     - `14 Hari (2 Minggu)` — *Default Guru*
-     - `30 Hari (1 Bulan)` — *Default Pojok Baca*
-2. **Pengembalian Kilat:** Tembak barcode buku untuk pengembalian 1-detik. Otomatis mengecek antrean reservasi.
-3. **Buku Terlambat:** Menampilkan siswa yang melewati jatuh tempo beserta tombol salin pesan tagihan WhatsApp orang tua.
-4. **Perpanjangan Pinjam (Tab Baru ✨):**
-   - Masukkan ID/Barcode peminjaman atau cari nama siswa.
-   - Pilih opsi penambahan waktu: `+3 Hari`, `+7 Hari`, atau `+14 Hari`.
-   - Sistem memvalidasi kuota perpanjangan (Siswa: maks 1x, Guru: maks 2x). Jika kuota habis, sistem menolak perpanjangan agar buku dapat bergantian dibaca oleh siswa lain.
-5. **Cek Riwayat Buku:** Pelacakan jejak riwayat peminjaman masa lalu per eksemplar.
+Untuk menjaga kerahasiaan data siswa dan sekolah:
+1. **Arsitektur Database Offline-First (Local Storage & Local Backup):**
+   - Seluruh data siswa, nomor WhatsApp orang tua, dan riwayat sirkulasi disimpan secara **lokal di komputer sekolah**.
+   - Data **tidak pernah diunggah ke cloud publik pihak ketiga**, sehingga bebas dari risiko kebocoran data (*data breach*) di internet.
+2. **Proteksi Autentikasi Ganda Pustakawan:**
+   - Mode staf perpustakaan terkunci rapat di balik PIN Keamanan.
+   - Tanpa PIN, layar hanya menampilkan Katalog Visual Anak (OPAC) yang aman disentuh anak-anak tanpa khawatir merusak setelan.
+3. **Pencadangan Rutin (Snapshot Backup):**
+   - Sebelum melakukan perubahan besar (seperti penomoran ulang barcode massal), sistem secara otomatis membuat *Backup Snapshot* lokal.
+   - Pustakawan dapat mengunduh seluruh database perpustakaan ke dalam format **Excel 5-Sheet Lengkap** kapan saja untuk arsip offline.
 
 ---
 
-## 6. Aturan Peminjaman Fleksibel (Loan Rules)
+## 5. Aktivasi & Masuk ke Mode Pustakawan (Admin PIN: 1234 & sbth2026)
 
-Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Aturan Pinjam"** untuk mengatur kebijakan operasional:
-- **Aturan per Tipe Anggota:**
-  - **Siswa / Murid TK:** Maksimal 2 buku, durasi 7 hari, batas perpanjangan 1 kali.
-  - **Guru & Tenaga Pendidik:** Maksimal 5 buku, durasi 14 hari, batas perpanjangan 2 kali.
-  - **Pojok Baca Sentra / Kelas:** Maksimal 15 buku, durasi 30 hari, batas perpanjangan 3 kali.
-- **Pilihan Durasi Cepat di Kasir:** Aktifkan/nonaktifkan tombol pilihan hari di meja kasir sirkulasi.
-- **Masa Hold Reservasi:** Atur durasi penguncian buku booking (default: 24 jam).
-- **Infaq Denda Keterlambatan:** Atur tarif denda per hari (default: Rp 500 / hari / buku).
+Secara bawaan, aplikasi akan membuka Katalog Visual Anak (OPAC). Untuk masuk ke meja kerja pustakawan:
+
+1. Di pojok kanan atas layar, klik tombol **"Mode Pustakawan"**.
+2. Masukkan PIN keamanan. **Kedua metode berikut aktif dan berfungsi:**
+   - **PIN Angka (Touchscreen / Keypad):** `1234`
+   - **Master Password (Keyboard Fisik):** `sbth2026`
+   - *(Atau PIN khusus pustakawan masing-masing yang didaftarkan di menu Pengaturan).*
+3. Tersedia tombol bantuan 1-klik `[⚡ PIN Cepat: 1234]` dan `[🔑 Master: sbth2026]` pada jendela login.
+4. Anda dapat mengganti PIN atau menambah pustakawan lain sewaktu-waktu melalui menu **Lainnya ➔ Pengaturan ➔ Tab Pustakawan**.
 
 ---
 
-## 7. Standarisasi Penamaan SLiMS: Barcode & Call Number 3-Baris
+## 6. Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)
+
+Meja Sirkulasi Pustakawan memudahkan pencarian anggota secara fleksibel:
+- **Mode Peminjaman Baru:**
+  - Ketik **Nama Siswa** (contoh: `Alvaro`) ATAU **Username** (contoh: `alvaro` atau `SBTH-M-0015`).
+  - Sistem menampilkan kartu siswa lengkap dengan badge `@username`.
+  - Scan barcode buku fisik (contoh: `B00001` atau `SBTH-B-00101`).
+- **Mode Perpanjangan Pinjaman (Renewal):**
+  - Bisa mencari transaksi berdasarkan **Nama Siswa** maupun **Username**.
+  - Pilih durasi perpanjangan (`+3 Hari`, `+7 Hari`, `+14 Hari`). Kuota perpanjangan otomatis diawasi sistem.
+
+---
+
+## 7. Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)
+
+Buka menu **Anggota & Kartu ➔ + Tambah Anggota**:
+1. **Wajib Mengisi Username:**
+   - Username digunakan siswa dan orang tua untuk login mandiri.
+   - Sistem otomatis memvalidasi keunikan username (tidak boleh ganda/duplikat di antara siswa aktif).
+2. **Pemakaian Ulang Username Lama:**
+   - Jika ada siswa lama yang sudah **Lulus (Graduated)** atau **Keluar (Inactive)**, username lama tersebut **dapat dipakai kembali** untuk siswa baru pada tahun ajaran berikutnya tanpa error.
+3. **Password Default:**
+   - Sistem menetapkan password awal default `1234` yang nantinya dapat diubah mandiri oleh siswa/orang tua.
+
+---
+
+## 8. Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)
+
+Jika siswa atau orang tua lupa data akun login:
+1. Klik tombol **🎒 Masuk Akun Siswa & Ortu** di pojok kanan atas.
+2. Di bawah form login, klik **"Lupa Username? Kirim via WhatsApp Ortu"**.
+3. Masukkan nomor WhatsApp orang tua yang terdaftar (contoh: `08123456789`).
+4. Sistem otomatis menampilkan akun ananda beserta tombol hijau:
+   `[ 📱 Kirim Data Akun ke WhatsApp ]`
+5. Mengklik tombol tersebut akan langsung membuka WhatsApp dengan draf pesan resmi berisi Nama, Kelas, Username, dan Password siswa siap kirim tanpa repot antre ke pustakawan.
+6. Hal yang sama berlaku untuk fitur **"Lupa Password?"** yang membuatkan PIN baru dan mengirimkan tautan konfirmasi ke WhatsApp orang tua.
+
+---
+
+## 9. Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)
+
+Aturan ketat reservasi antrean buku:
+1. **Mode Tamu Umum Dimatikan:**
+   - Pengunjung umum yang belum login **tidak dapat melakukan reservasi**. Tombol reservasi menampilkan gembok aman dan mengarahkan pengguna untuk login ke Portal Siswa.
+2. **Hanya Memesan untuk Diri Sendiri:**
+   - Menu dropdown pilih siswa telah dihapus. Reservasi secara otomatis terikat khusus pada akun siswa yang sedang login.
+3. **Pilihan Rencana Tanggal Pengambilan:**
+   - Siswa dapat memilih tanggal rencana pengambilan buku di perpustakaan melalui kalender picker.
+4. **Timer Rundown 1x24 Jam:**
+   - Saat peminjam sebelumnya mengembalikan buku fisik ke perpustakaan, status reservasi berubah menjadi **READY_FOR_PICKUP**.
+   - **Timer countdown hitung mundur 1x24 jam** langsung aktif dan berdetik live detik-demi-detik di **Tab "⏳ Reservasi Saya"** pada Portal Mandiri Siswa.
+   - Jika buku tidak diambil dalam waktu 24 jam, buku otomatis tersedia kembali untuk umum.
+
+---
+
+## 10. Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)
 
 Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Pola SLiMS & Barcode"**:
 
-### A. Generator Pola Kode Eksemplar Otomatis
-Sistem menyediakan 4 pilihan pola penomoran:
-1. **Standar SBTH TK:** `SBTH-B-00101`, `SBTH-B-00102`, dst.
-2. **SLiMS 9 Bulian Bawaan:** `B00001`, `B00002`, dst.
-3. **Kode Kategori Rak:** `DNG-00001` (Dongeng), `SAI-00001` (Sains), dll.
-4. **Kustom Sekolah:** Bebas menentukan awalan (prefix), panjang nomor seri (digit), dan akhiran (suffix, misal: `/2026`).
+### Langkah 1: Pilih Gaya Kode Barcode (Cukup Klik Salah Satu Kotak di Atas)
+Di bagian *"Pilih Preset Pola Penamaan"*, klik salah satu dari 4 kotak yang paling cocok dengan kebutuhan sekolah Anda:
+- **Jika ingin yang paling standar (Rekomendasi):** Biarkan terpilih di kotak ke-2 (**SLiMS 9 Bulian**). Kode bukunya nanti simpel: `B00001`, `B00002`, dst.
+- **Jika ingin ada nama sekolah SBTH:** Klik kotak ke-1 (**Standar SBTH TK**). Kode bukunya nanti otomatis menjadi: `SBTH-B-00001`, dst.
+- **Jika ingin tahu posisi rak langsung dari kode barcode:** Klik kotak ke-3 (**Kode Kategori Rak**). Kode bukunya nanti mengikuti topik rak, misalnya `DNG-00001` (Dongeng) atau `SAI-00001` (Sains).
+*(Catatan: Jika Anda sudah mengklik salah satu dari kotak di atas, kolom-kolom di bagian tengah otomatis terisi sendiri).*
 
-### B. Standar Nomor Panggil Buku (Call Number 3-Baris)
-Format stiker etiket punggung buku standar Perpusnas & SLiMS:
+### Langkah 2: Cek Bagian Tengah (Hanya Jika Perlu Diubah)
+Bagian *"Detail Konfigurasi Pola Nomor Barcode"* otomatis terisi saat Anda memilih kotak di Langkah 1. Anda hanya perlu mengubahnya jika:
+- **Nomor Urut Berikutnya:** Saat ini tertulis angka 1 (artinya buku baru pertama yang akan dimasukkan nanti kodenya `B00001`). Jika di perpustakaan sudah ada 50 buku yang ditempeli barcode lama dan Anda ingin melanjutkan dari nomor 51, ganti angka 1 tersebut menjadi **51**.
+- **Suffix (Akhiran):** Boleh dikosongkan saja. Isi dengan `/2026` hanya jika Anda ingin ada tahun pengadaan di ujung kode buku (contoh hasil: `B00001/2026`).
+- Lihat tulisan kuning di bagian *"Pratinjau Kode Eksemplar Baru"* (saat ini tertulis `B00001`). Jika bentuk kodenya sudah sesuai keinginan Anda, berarti pengaturannya sudah pas.
+
+### Langkah 3: Bagian Bawah Tidak Perlu Diotak-atik
+Kotak paling bawah (*Standar Nomor Panggil Buku / Call Number 3-Baris SLiMS*) tidak perlu disetting. Bagian itu hanya info/contoh bahwa setiap kali Anda menambah buku baru dan mengisi judul serta nama pengarangnya, sistem otomatis membuatkan label stiker punggung buku 3 baris:
 ```text
 ┌──────────────┐
-│   398.2      │  <- Baris 1: Kode Klasifikasi DDC Subjek Buku
-│    TIM       │  <- Baris 2: 3 Huruf Pertama Nama Belakang/Pengarang (KAPITAL)
-│     d        │  <- Baris 3: 1 Huruf Pertama Judul Buku (huruf kecil)
+│   398.2      │  <- Baris 1: Nomor Klasifikasi DDC
+│    TIM       │  <- Baris 2: 3 Huruf Nama Pengarang (KAPITAL)
+│     d        │  <- Baris 3: 1 Huruf Pertama Judul (kecil)
 └──────────────┘
-Hasil: 398.2 TIM d
 ```
 
----
-
-## 8. Ekspor Koleksi Format SLiMS CSV & Excel
-
-Untuk kebutuhan migrasi data massal, pencadangan berkala, atau sinkronisasi dengan aplikasi lain:
-1. Buka menu **Koleksi & Eksemplar**.
-2. Klik tombol **`[ 📥 Ekspor SLiMS ]`** di bagian atas.
-3. File `Koleksi_Buku_Format_SLIMS.csv` otomatis terunduh dengan format header standar SLiMS:
-   ```csv
-   item_code,title,author,publisher,publish_year,isbn,call_number,classification,location,status,source,price_value
-   ```
-4. File ini dapat langsung diimpor ke SLiMS 9 Bulian melalui menu **Bibliografi ➔ Impor Data**.
+### Langkah 4: Klik Simpan
+Jika sudah memilih kotak di Langkah 1, langsung klik tombol oranye **"Simpan Format SLiMS"** di pojok kanan atas. Selesai!
 
 ---
 
-## 9. Sistem Manajemen Konten (CMS Warta & Pengumuman)
+## 11. Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)
 
-Pustakawan dapat menerbitkan warta informasi yang akan tampil langsung di banner berjalan pada halaman utama OPAC anak:
-1. Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Warta Perpus (CMS)"**.
-2. Klik tombol **`[ + Terbitkan Warta Baru ]`**.
-3. Isi Judul, Kategori (*Pengumuman, Libur Sekolah, Stock Opname, Agenda Dongeng, Buku Baru*), Ringkasan Banner, dan Isi Lengkap.
-4. Aktifkan opsi **"📌 Sematkan di urutan paling atas"** jika merupakan informasi penting darurat.
-5. Pustakawan dapat menonaktifkan atau mengaktifkan kembali warta kapan saja menggunakan tombol ikon mata (`Eye`).
-
----
-
-## 10. Stock Opname (Cacah Ulang Koleksi Fisik Rak)
-
-Sistem audit inventaris fisik rak buku yang mudah (*"As easy as ABC"*):
-1. **Tahap Persiapan:**
-   - Rapikan buku di rak (*shelving*) sesuai nomor klasifikasi DDC.
-   - Buka menu **Koleksi ➔ Stock Opname**.
-2. **Tahap Eksekusi (Scanning Fisik):**
-   - Bawa laptop dan scanner barcode USB ke lorong rak buku.
-   - Arahkan scanner ke stiker barcode di sampul belakang setiap buku.
-   - Sistem berbunyi bip hijau untuk setiap buku yang cocok dan mencatat statusnya sebagai **FOUND**.
-3. **Tahap Rekonsiliasi & Berita Acara:**
-   - Sistem otomatis mengelompokkan buku yang *Cocok*, *Hilang (Missing)*, dan *Rusak (Damaged)*.
-   - Klik **"Cetak Berita Acara Stock Opname"** untuk menghasilkan dokumen formal ber-KOP resmi sekolah lengkap dengan tanda tangan elektronik Kepala Sekolah dan Pustakawan Utama.
+Di panel SLiMS tersedia fitur canggih untuk mengubah format seluruh koleksi:
+- **Tombol `[ Ubah Semua Kode Buku Lama Mengikuti Pola Ini ]`:**
+  - Mengubah seluruh kode barcode buku lama agar seragam mengikuti pola baru.
+  - Seluruh riwayat peminjaman otomatis disesuaikan agar tidak ada data yang putus.
+  - Dilengkapi konfirmasi ganda pengamanan data.
+- **Tombol `[ ↩️ Kembalikan (Restore) Kode Barcode Sebelumnya ]`:**
+  - Jika terjadi kesalahan pemilihan preset, pustakawan dapat mengklik tombol ini untuk memulihkan seluruh barcode buku ke kondisi awal secara instan.
+- **💡 Saran Teknis Pustakawan:**
+  - Pola penamaan barcode **wajib ditentukan dari awal** sebelum mencetak dan menempel stiker barcode fisik pada buku.
+  - Hindari sering merubah pola penamaan index barcode buku yang sudah berjalan agar label fisik buku di rak tidak perlu dicetak ulang.
 
 ---
 
-## 11. Dukungan Perangkat Keras & Kontak Pengembang
+## 12. CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)
 
-- **Scanner Barcode:** Kompatibel 100% dengan seluruh merk scanner barcode USB dan Wireless 2.4GHz (Honeywell, Eyoyo, Netum, Kassen, dll.).
-- **Printer:** Kompatibel dengan printer thermal stiker barcode (Xprinter, Blueprint, Epson) dan printer inkjet/laser warna (Canon, Epson, HP).
-- **Perangkat Akses:** Mendukung PC Windows, Mac, iPad, Android Tablet, dan Smartphone.
+Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Warta Perpus (CMS)"**:
+- Pustakawan dapat menerbitkan banyak pengumuman sekaligus (Jadwal Libur, Stock Opname, Agenda Dongeng, Buku Baru).
+- Setiap pengumuman dapat disematkan (*Pin Article*) dengan mencentang opsi **"📌 Sematkan di urutan paling atas"**.
+- Di halaman utama OPAC anak, pengumuman tampil dalam bentuk **Auto-Sliding Carousel Ticker** yang:
+  - Otomatis bergulir (*slide*) setiap 6 detik.
+  - Memiliki tombol panah kiri-kanan manual dan indikator titik (*dots*).
+  - Menampilkan badge oranye menyala jika disematkan.
+  - Klik kartu untuk membaca isi pengumuman lengkap.
 
 ---
 
-### 👨‍💻 Pengembang & Bantuan Teknis
-Aplikasi ini dikembangkan dan dipelihara secara berkesinambungan oleh:
+## 13. Ekspor Cadangan Master Excel & SLiMS CSV
+
+Pustakawan dapat mengamankan data secara berkala:
+1. **Master Excel 5-Sheet Yayasan SBTH:**
+   - Buka menu **Lainnya ➔ Master Excel**.
+   - Klik **"Unduh Master Excel 5-Sheet"**.
+   - Berisi Rekap Bulanan, Master Katalog, Inventaris Fisik, Riwayat Sirkulasi, dan Data Anggota Siswa.
+2. **Ekspor SLiMS CSV:**
+   - Buka menu **Koleksi & Eksemplar ➔ Unduh Format SLiMS**.
+   - File CSV langsung siap diimpor ke aplikasi SLiMS 9 Bulian standar perpustakaan nasional.
+
+---
+
+## 14. Kontak Bantuan Teknis
+
+Aplikasi ini dikembangkan dan didukung penuh oleh:
 - **Nama**: Prasetyo Handy Kurniawan
 - **WhatsApp**: [+62 812-9125-5917](https://wa.me/6281291255917)
 - **Email**: prasetyo.handy@gmail.com

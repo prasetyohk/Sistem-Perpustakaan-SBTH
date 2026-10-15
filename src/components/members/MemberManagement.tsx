@@ -53,6 +53,9 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
 
   // New member form
   const [name, setName] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('1234');
+  const [usernameError, setUsernameError] = useState<string>('');
   const [type, setType] = useState<MemberType>('STUDENT');
   const [gradeLevel, setGradeLevel] = useState<GradeLevel>('TK_A');
   const [classLetter, setClassLetter] = useState<string>('A');
@@ -96,6 +99,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
       const q = search.toLowerCase();
       return (
         m.name.toLowerCase().includes(q) ||
+        (m.username && m.username.toLowerCase().includes(q)) ||
         m.memberCode.toLowerCase().includes(q) ||
         m.classGroup.toLowerCase().includes(q) ||
         (m.academicYear && m.academicYear.toLowerCase().includes(q))
@@ -143,6 +147,20 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
   const handleCreateMember = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setUsernameError('');
+
+    const cleanUsername = (
+      username.trim() || name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+    ).toLowerCase();
+
+    // Validasi username tidak boleh duplikat di antara anggota aktif
+    if (libraryStore.isUsernameTaken(cleanUsername)) {
+      const msg = `Username "@${cleanUsername}" sudah digunakan oleh anggota aktif lain! Silakan pilih username yang berbeda (misal tambahkan angka kelas).`;
+      setUsernameError(msg);
+      soundFx.playErrorBeep();
+      alert(`⚠️ PERINGATAN USERNAME GANDA:\n${msg}`);
+      return;
+    }
 
     let finalClassGroup = '';
     if (type === 'STUDENT') {
@@ -167,6 +185,8 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
 
     libraryStore.addMember({
       name: name.trim(),
+      username: cleanUsername,
+      password: password.trim() || '1234',
       type,
       gradeLevel: type === 'TEACHER' ? 'TEACHER' : gradeLevel,
       classLetter,
@@ -180,12 +200,15 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
 
     soundFx.playSuccessChime();
     setName('');
+    setUsername('');
+    setPassword('1234');
+    setUsernameError('');
     setParentName('');
     setParentPhone('');
     setPhotoUrl('');
     setIsAddModalOpen(false);
     if (onRefresh) onRefresh();
-    alert(`Anggota "${name}" berhasil ditambahkan dengan kuota ${maxLoans} buku.`);
+    alert(`✓ Anggota "${name}" (@${cleanUsername}) berhasil ditambahkan!\nPIN Akun: ${password.trim() || '1234'}`);
   };
 
   const handleExecuteTransition = () => {
@@ -358,6 +381,11 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
                       <span className="inline-block px-2 py-0.5 rounded-md bg-surface-2 text-text-muted font-mono text-[10px] font-bold border border-border">
                         {member.memberCode}
                       </span>
+                      {member.username && (
+                        <span className="inline-block px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 font-mono text-[10px] font-bold border border-amber-500/20">
+                          @{member.username}
+                        </span>
+                      )}
                       {member.status === 'GRADUATED' ? (
                         <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-500 text-[10px] font-semibold">
                           Alumni (Lulus)
@@ -494,7 +522,12 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
                             size="sm"
                             shape="circle"
                           />
-                          <span className="font-semibold text-text">{member.name}</span>
+                          <div>
+                            <span className="font-semibold text-text block">{member.name}</span>
+                            {member.username && (
+                              <span className="text-[10px] text-amber-500 font-mono font-bold">@{member.username}</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-4 font-mono text-text-muted">
@@ -813,10 +846,72 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    const newName = e.target.value;
+                    setName(newName);
+                    if (!username || username === name.toLowerCase().replace(/[^a-z0-9]/g, '_')) {
+                      setUsername(newName.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+                    }
+                  }}
                   placeholder="Contoh: Rayyan Althaf"
                   className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
                 />
+              </div>
+
+              {/* Username & Password Account Box */}
+              <div className="p-3.5 rounded-2xl bg-surface-2 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                    🔑 Akun Login Portal Siswa & Wali Murid
+                  </span>
+                  <span className="text-[10px] text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md">
+                    Wajib Unik
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-text block mb-1">
+                      Username Login:
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-amber-500">@</span>
+                      <input
+                        type="text"
+                        required
+                        value={username}
+                        onChange={(e) => {
+                          setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                          setUsernameError('');
+                        }}
+                        placeholder="contoh: rayyan_a"
+                        className="w-full rounded-xl border border-border bg-surface pl-7 pr-3 py-2 text-xs text-text font-mono font-bold placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-text block mb-1">
+                      PIN / Password (Default):
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="1234"
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text font-mono font-bold placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {usernameError && (
+                  <p className="text-[11px] font-semibold text-rose-500">{usernameError}</p>
+                )}
+
+                <p className="text-[10px] text-text-muted leading-relaxed">
+                  ℹ️ Username tidak boleh ganda di antara siswa aktif. Jika anggota lama sudah lulus atau akunnya dihapus, username lama dapat dipakai kembali.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

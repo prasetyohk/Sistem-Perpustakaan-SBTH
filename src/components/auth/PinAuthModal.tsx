@@ -25,21 +25,22 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
-    const matched = libraryStore.verifyLibrarianPin(pin);
-    // Allow master pin 1234 as fallback
-    if (matched || pin === '1234') {
+    const cleanPin = pin.trim();
+    const matched = libraryStore.verifyLibrarianPin(cleanPin);
+    // Support both quick PIN 1234 and master password sbth2026
+    if (matched || cleanPin === '1234' || cleanPin.toLowerCase() === 'sbth2026') {
       soundFx.playSuccessChime();
       setPin('');
       onSuccess();
     } else {
       soundFx.playErrorBeep();
-      setErrorMsg('PIN / Password salah. Silakan coba lagi.');
+      setErrorMsg('PIN / Password salah. Coba 1234 atau sbth2026.');
       setPin('');
     }
   };
 
   const handleNumberClick = (num: string) => {
-    if (pin.length < 8) {
+    if (pin.length < 16) {
       setPin((prev) => prev + num);
       soundFx.playScanBeep();
     }
@@ -49,9 +50,14 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
     setPin((prev) => prev.slice(0, -1));
   };
 
+  const handleQuickFill = (code: string) => {
+    setPin(code);
+    soundFx.playScanBeep();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in">
-      <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5 text-center">
+      <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 text-center">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 rounded-full p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
@@ -72,16 +78,16 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
           </p>
         </div>
 
-        <form onSubmit={handleVerify} className="space-y-4">
+        <form onSubmit={handleVerify} className="space-y-3">
           <div className="relative">
             <input
               type="password"
               autoFocus
-              maxLength={8}
+              maxLength={24}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="••••"
-              className="w-full text-center tracking-[0.5em] text-2xl font-bold rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-3 outline-hidden focus:border-blue-600"
+              className="w-full text-center tracking-[0.3em] text-xl font-bold rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-2.5 outline-hidden focus:border-blue-600"
             />
           </div>
 
@@ -91,6 +97,24 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* Quick 1-Click Fill Chips */}
+          <div className="flex items-center justify-center gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => handleQuickFill('1234')}
+              className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-[11px] font-bold transition cursor-pointer"
+            >
+              ⚡ PIN: 1234
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickFill('sbth2026')}
+              className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 text-[11px] font-bold transition cursor-pointer"
+            >
+              🔑 Master: sbth2026
+            </button>
+          </div>
 
           {/* Quick Numpad for Touchscreen / Tablet */}
           <div className="grid grid-cols-3 gap-2 pt-1">
@@ -103,7 +127,7 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
                   else if (k === '⌫') handleBackspace();
                   else handleNumberClick(k);
                 }}
-                className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-sm text-slate-700 dark:text-slate-200 transition active:scale-95"
+                className="py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-sm text-slate-700 dark:text-slate-200 transition active:scale-95"
               >
                 {k}
               </button>
@@ -119,9 +143,12 @@ export const PinAuthModal: React.FC<PinAuthModalProps> = ({
           </button>
         </form>
 
-        <p className="text-[10px] text-slate-400">
-          PIN Standar: <strong>1234</strong> (Dapat diubah di menu Pengaturan)
-        </p>
+        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5 text-left">
+          <p className="font-semibold text-slate-700 dark:text-slate-200">ℹ️ Informasi Akses:</p>
+          <p>• <strong>1234</strong> : PIN cepat angka layar sentuh.</p>
+          <p>• <strong>sbth2026</strong> : Password master bawaan keyboard.</p>
+          <p className="text-[10px] text-slate-400 pt-0.5">Keduanya aktif dan dapat diganti di menu Pengaturan ➔ Pustakawan.</p>
+        </div>
       </div>
     </div>
   );

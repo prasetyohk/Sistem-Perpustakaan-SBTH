@@ -277,7 +277,8 @@ export interface Reservation {
   memberClass: string;
   parentPhone?: string;
   requestDate: string; // YYYY-MM-DD HH:mm
-  expiryDate: string;  // YYYY-MM-DD HH:mm (e.g. 24 jam setelah buku ready)
+  expiryDate: string;  // YYYY-MM-DD HH:mm (e.g. 24 jam setelah buku ready / dibuat)
+  desiredPickupDate?: string; // YYYY-MM-DD (Tanggal rencana siswa/wali mengambil buku)
   status: 'PENDING' | 'READY_FOR_PICKUP' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED';
   notifiedAt?: string;
   handledBy?: string;

@@ -97,6 +97,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // SLiMS Pattern Config state
   const [slimsPattern, setSlimsPattern] = useState<SlimsPatternConfig>(libraryStore.getSlimsPattern());
+  const [hasBackup, setHasBackup] = useState<boolean>(false);
+  const [isGuideExpanded, setIsGuideExpanded] = useState<boolean>(true);
 
   // CMS News state
   const [newsList, setNewsList] = useState<LibraryNewsArticle[]>(libraryStore.getLibraryNews());
@@ -118,6 +120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setCategories(libraryStore.getCategories());
       setLoanRules(libraryStore.getLoanRules());
       setSlimsPattern(libraryStore.getSlimsPattern());
+      setHasBackup(libraryStore.hasReindexBackup());
       setNewsList(libraryStore.getLibraryNews());
       setToastMessage('');
     }
@@ -316,6 +319,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       suffix,
     });
     soundFx.playScanBeep();
+  };
+
+  const handleReindexAllBarcodes = () => {
+    const totalItems = libraryStore.getBookItems().length;
+    const confirm1 = confirm(
+      `⚠️ PERINGATAN PENTING & KRUSIAL:\n\n` +
+        `Apakah Anda yakin ingin MENGUBAH SEMUA (${totalItems} eksemplar) KODE BARCODE BUKU di perpustakaan agar seragam mengikuti pola "${slimsPattern.prefix}..."?\n\n` +
+        `⚠️ SARAN TEKNIS PUSTAKAWAN:\n` +
+        `Pola penamaan index barcode buku WAJIB DITENTUKAN DARI AWAL dan sangat disarankan TIDAK DIUBAH-UBAH setelah stiker fisik ditempel pada buku, karena barcode fisik yang sudah ditempel pada buku harus dicetak dan diganti ulang jika kodenya berubah!\n\n` +
+        `Apakah Anda tetap ingin melanjutkan penomoran ulang seluruh buku sekarang?`
+    );
+    if (!confirm1) return;
+
+    const confirm2 = confirm(
+      `🚨 KONFIRMASI KEDUA (PENGAMANAN DATA):\n\n` +
+        `Sistem akan otomatis membuat CADANGAN (BACKUP SNAPSHOT) kode lama sebelum proses berjalan. Anda dapat membatalkan/mengembalikan kode kapan saja.\n\n` +
+        `Ketik OK untuk melanjutkan proses penomoran ulang massal.`
+    );
+    if (!confirm2) return;
+
+    const res = libraryStore.reindexAllBookBarcodes(slimsPattern);
+    setHasBackup(true);
+    soundFx.playSuccessChime();
+    alert(
+      `✅ Penomoran Ulang Berhasil!\n\nSebanyak ${res.count} eksemplar buku telah disesuaikan dengan pola "${slimsPattern.prefix}...".\n\nNomor urut berikutnya otomatis diset ke: ${res.nextNumber}.`
+    );
+    setSlimsPattern(libraryStore.getSlimsPattern());
+    if (onProfileUpdated) onProfileUpdated();
+    showToast(`✓ Berhasil memperbarui ${res.count} barcode buku.`);
+  };
+
+  const handleRestoreBarcodes = () => {
+    const confirmRestore = confirm(
+      `🔄 KEMBALIKAN (RESTORE) KODE BARCODE SEBELUMNYA?\n\n` +
+        `Sistem akan memulihkan seluruh nomor barcode eksemplar buku ke kondisi sebelum penomoran ulang terakhir.\n\n` +
+        `Lanjutkan pemulihan kode lama?`
+    );
+    if (!confirmRestore) return;
+
+    const res = libraryStore.restorePreviousBookBarcodes();
+    if (res.success) {
+      setHasBackup(false);
+      soundFx.playSuccessChime();
+      alert(`✅ Berhasil Dipulihkan!\n\nSebanyak ${res.count} buku telah dikembalikan ke kode barcode semula.`);
+      setSlimsPattern(libraryStore.getSlimsPattern());
+      if (onProfileUpdated) onProfileUpdated();
+      showToast(`✓ Berhasil memulihkan ${res.count} barcode lama.`);
+    } else {
+      soundFx.playErrorBeep();
+      alert(`Gagal memulihkan: ${res.message}`);
+    }
   };
 
   // --- CMS NEWS HANDLERS ---
@@ -1059,7 +1113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <div>
                       <label className="text-[11px] font-semibold text-text block mb-1">
-                        Infaq Denda Keterlambatan:
+                        Denda Keterlambatan:
                       </label>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-text-muted">Rp</span>
@@ -1087,7 +1141,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* TAB: POLA PENAMAAN SLIMS & BARCODE GENERATOR */}
             {activeTab === 'SLIMS_CONFIG' && (
               <form onSubmit={handleSaveSlimsPattern} className="space-y-6 animate-in fade-in">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-bold font-display text-text flex items-center gap-2">
                       <Barcode className="h-4 w-4 text-amber-500" />
@@ -1097,14 +1151,111 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Generator otomatis nomor inventaris fisik buku dan nomor panggil (Call Number) 3-baris standar SLiMS 9 Bulian
                     </p>
                   </div>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    <span>Simpan Format SLiMS</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsGuideExpanded(!isGuideExpanded)}
+                      className="px-3 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-amber-500 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <HelpCircle className="h-3.5 w-3.5" />
+                      <span>{isGuideExpanded ? 'Sembunyikan Panduan' : '📖 Buka Panduan Cara Pakai'}</span>
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      <span>Simpan Format SLiMS</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* 📘 PANDUAN PENGGUNAAN FORMAT SLIMS (BAHASA SEDERHANA) */}
+                {isGuideExpanded && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3.5 text-xs text-text animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-500 font-bold text-xs">
+                        <BookOpen className="h-4 w-4" />
+                        <span>PANDUAN PRAKTIS CARA PENGGUNAAN FORMAT SLIMS (4 LANGKAH MUDAH):</span>
+                      </div>
+                      <span className="text-[10px] text-text-muted">Mudah dipahami guru & pustakawan</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs leading-relaxed">
+                      {/* Langkah 1 */}
+                      <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5">
+                        <span className="font-extrabold text-amber-500 flex items-center gap-1.5 text-xs">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold">1</span>
+                          Langkah 1: Pilih Gaya Kode Barcode (Klik Salah Satu Kotak)
+                        </span>
+                        <p className="text-text-muted text-[11px]">
+                          Di bagian <strong>&quot;Pilih Preset Pola Penamaan&quot;</strong>, klik salah satu dari 4 kotak yang paling cocok:
+                        </p>
+                        <ul className="text-[11px] text-text-muted space-y-1 list-disc list-inside">
+                          <li><strong>Paling Standar (Rekomendasi):</strong> Kotak ke-2 (<em>SLiMS 9 Bulian</em>) → kode simpel: <code>B00001</code>, <code>B00002</code>, dst.</li>
+                          <li><strong>Ada Nama Sekolah:</strong> Kotak ke-1 (<em>Standar SBTH TK</em>) → <code>SBTH-B-00001</code>, dst.</li>
+                          <li><strong>Posisi Rak Langsung:</strong> Kotak ke-3 (<em>Kode Kategori Rak</em>) → <code>DNG-00001</code> (Dongeng) atau <code>SAI-00001</code> (Sains).</li>
+                        </ul>
+                        <p className="text-[10px] text-emerald-500 font-semibold">
+                          *(Catatan: Setelah mengklik salah satu kotak di atas, kolom-kolom di bagian tengah otomatis terisi sendiri).*
+                        </p>
+                      </div>
+
+                      {/* Langkah 2 */}
+                      <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5">
+                        <span className="font-extrabold text-amber-500 flex items-center gap-1.5 text-xs">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold">2</span>
+                          Langkah 2: Cek Bagian Tengah (Hanya Jika Perlu Diubah)
+                        </span>
+                        <p className="text-text-muted text-[11px]">
+                          Bagian tengah otomatis terisi. Anda hanya perlu mengubahnya jika:
+                        </p>
+                        <ul className="text-[11px] text-text-muted space-y-1 list-disc list-inside">
+                          <li><strong>Nomor Urut Berikutnya:</strong> Jika di perpustakaan sudah ada 50 buku lama dan ingin melanjutkan dari nomor 51, ganti angka 1 menjadi <strong>51</strong>.</li>
+                          <li><strong>Suffix (Akhiran):</strong> Boleh dikosongkan. Isi <code>/2026</code> jika ingin ada tahun pengadaan (contoh: <code>B00001/2026</code>).</li>
+                          <li><strong>Pratinjau Kuning:</strong> Jika bentuk kodenya sudah sesuai keinginan Anda, berarti pengaturannya sudah pas.</li>
+                        </ul>
+                      </div>
+
+                      {/* Langkah 3 */}
+                      <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5">
+                        <span className="font-extrabold text-amber-500 flex items-center gap-1.5 text-xs">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold">3</span>
+                          Langkah 3: Bagian Bawah Tidak Perlu Diotak-atik
+                        </span>
+                        <p className="text-text-muted text-[11px]">
+                          Kotak paling bawah (<em>Standar Nomor Panggil Buku / Call Number 3-Baris SLiMS</em>) tidak perlu disetting. Bagian itu hanya info/contoh bahwa setiap kali Anda menambah buku baru, sistem otomatis membuatkan label stiker punggung buku 3 baris (Klasifikasi DDC, 3 Huruf Pengarang, 1 Huruf Judul).
+                        </p>
+                      </div>
+
+                      {/* Langkah 4 */}
+                      <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5 flex flex-col justify-between">
+                        <div>
+                          <span className="font-extrabold text-amber-500 flex items-center gap-1.5 text-xs">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[11px] font-bold">4</span>
+                            Langkah 4: Klik Simpan
+                          </span>
+                          <p className="text-text-muted text-[11px] mt-1">
+                            Jika sudah memilih kotak di Langkah 1, langsung klik tombol oranye <strong>&quot;Simpan Format SLiMS&quot;</strong> di pojok kanan atas. Selesai! Buku baru berikutnya akan otomatis mendapatkan nomor urut rapi.
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-border flex items-center justify-between text-[10px] text-text-muted">
+                          <span>Panduan Format SLiMS Magelang SBTH</span>
+                          <a
+                            href="#panduan-slims"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              alert('Anda sedang berada di halaman konfigurasi dan panduan resmi format barcode SLiMS 9 Bulian SBTH TK.');
+                            }}
+                            className="text-amber-500 font-bold hover:underline"
+                          >
+                            Tautan Dokumen Panduan ↗
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Preset Selector */}
                 <div className="space-y-2">
@@ -1121,7 +1272,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       },
                       {
                         id: 'SLIMS_STANDARD',
-                        title: 'SLiMS 9 Bulian',
+                        title: 'SLiMS 9 Bulian (Rekomendasi)',
                         sample: 'B00143',
                         desc: 'Awalan "B" standar bawaan sistem SLiMS',
                       },
@@ -1221,7 +1372,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   {/* Live Preview Box */}
-                  <div className="p-3.5 rounded-xl bg-surface border border-border flex items-center justify-between">
+                  <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <span className="text-[11px] font-semibold text-text-muted block">
                         Pratinjau Kode Eksemplar Baru Saat Tambah Buku:
@@ -1232,9 +1383,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {slimsPattern.suffix || ''}
                       </span>
                     </div>
-                    <span className="text-[11px] text-emerald-500 font-semibold bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                    <span className="text-[11px] text-emerald-500 font-semibold bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg w-fit">
                       ✓ Kompatibel Scanner Barcode USB
                     </span>
+                  </div>
+                </div>
+
+                {/* 🔄 PENYESUAIAN MASSAL KODE BARCODE BUKU (DENGAN SARAN & BACKUP SNAPSHOT) */}
+                <div className="p-5 rounded-2xl bg-surface-2 border border-border space-y-3.5">
+                  <div className="flex items-center gap-2 text-text font-bold text-xs">
+                    <Sliders className="h-4 w-4 text-amber-500" />
+                    <span>Penyesuaian Massal Kode Barcode Buku (Update Semua Preset)</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 space-y-1.5 leading-relaxed">
+                    <p className="font-bold flex items-center gap-1.5 text-amber-400">
+                      <span>💡 SARAN TEKNIS PUSTAKAWAN (PENTING):</span>
+                    </p>
+                    <p>
+                      • Pola penamaan index kode eksemplar <strong>wajib ditentukan dari awal</strong> sebelum mencetak dan menempel stiker barcode fisik pada buku.
+                    </p>
+                    <p>
+                      • <strong>Hindari sering mengubah-ubah pola penamaan</strong> pada buku yang sudah berjalan, karena jika kode di sistem diganti, stiker fisik barcode pada buku di rak harus dicetak dan ditempel ulang agar cocok saat discan!
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleReindexAllBarcodes}
+                      className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Barcode className="h-4 w-4" />
+                      <span>Ubah Semua Kode Buku Lama Mengikuti Pola Ini</span>
+                    </button>
+
+                    {hasBackup && (
+                      <button
+                        type="button"
+                        onClick={handleRestoreBarcodes}
+                        className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                        title="Kembalikan nomor barcode eksemplar ke kondisi sebelum diubah"
+                      >
+                        <Clock className="h-4 w-4" />
+                        <span>↩️ Kembalikan (Restore) Kode Barcode Sebelumnya</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
