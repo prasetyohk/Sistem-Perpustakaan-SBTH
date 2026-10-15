@@ -1130,7 +1130,35 @@ export const DEFAULT_REMINDER_SCHEDULE: import('@/types').ReminderSchedule = {
 
 export const DEFAULT_LOAN_RULES: import('@/types').LoanRules = {
   finePerDay: 500, // Rp 500 per hari per buku
-  loanDurationDays: 7, // 7 hari peminjaman
+  loanDurationDays: 7, // 7 hari peminjaman default siswa
+  maxBooksLimit: 2, // 2 buku per siswa
+  maxRenewals: 1, // maksimal 1x perpanjangan
+  renewalDurationDays: 7, // durasi perpanjangan 7 hari
+  allowedDurations: [3, 7, 14, 30],
+  reservationExpiryHours: 24, // 24 jam batas ambil buku reservasi
+  memberTypeRules: [
+    {
+      memberType: 'STUDENT',
+      label: 'Siswa / Murid TK',
+      maxBooks: 2,
+      loanDurationDays: 7,
+      maxRenewals: 1,
+    },
+    {
+      memberType: 'TEACHER',
+      label: 'Guru & Tenaga Pendidik',
+      maxBooks: 5,
+      loanDurationDays: 14,
+      maxRenewals: 2,
+    },
+    {
+      memberType: 'CLASSROOM',
+      label: 'Pojok Baca Sentra / Kelas',
+      maxBooks: 15,
+      loanDurationDays: 30,
+      maxRenewals: 3,
+    },
+  ],
   reminderDayBefore: 1, // Dikirim pada hari ke-6 (1 hari sebelum jatuh tempo)
   reminderTimeStr: '09:00', // Jam 09:00 pagi
   finesPurpose: 'Denda bertujuan untuk menertibkan peminjaman dan dikumpulkan kembali untuk pembelian buku cerita baru & perawatan buku perpustakaan.',
@@ -1139,6 +1167,78 @@ export const DEFAULT_LOAN_RULES: import('@/types').LoanRules = {
   qrisImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020101021126610016ID.CO.QRIS.WWW01189360099900000000000215ID10200394829100303UMI51440014ID.GOV.PERPUS5204581253033605802ID5944PERPUSTAKAAN%20KB-TK%20BHAKTI%20TUNAS%20HARAPAN6008MAGELANG6105561236304',
   enableFinanceModule: true,
 };
+
+// SLiMS 9 Bulian Pattern Generator Preset
+export const DEFAULT_SLIMS_PATTERN: import('@/types').SlimsPatternConfig = {
+  patternMode: 'SBTH',
+  prefix: 'SBTH-B-',
+  serialLength: 5,
+  suffix: '',
+  nextNumber: 143,
+};
+
+// Helper standar klasifikasi DDC & Nomor Panggil SLiMS (3 Baris: DDC + 3 Huruf Pengarang + 1 Huruf Judul)
+export function generateSlimsCallNumber(title: string, author: string, categoryId?: string): string {
+  // 1. Tentukan nomor DDC berdasarkan kategori buku TK
+  let ddc = '398.2'; // Fabel & Dongeng
+  if (categoryId === 'cat-alam') ddc = '500';
+  else if (categoryId === 'cat-aktivitas') ddc = '372.2';
+  else if (categoryId === 'cat-karakter') ddc = '170';
+  else if (categoryId === 'cat-ensiklopedia') ddc = '030';
+  else if (categoryId === 'cat-bahasa') ddc = '495.1';
+
+  // 2. Ambil 3 huruf kapital nama pengarang
+  const cleanAuthor = author.replace(/^(Tim|Kak|Dr\.|Dra\.|Mr\.|Ms\.|Miss)\s+/i, '').trim();
+  const authorWords = cleanAuthor.split(/\s+/).filter(Boolean);
+  const mainAuthor = authorWords[authorWords.length - 1] || authorWords[0] || 'SBTH';
+  const authorCode = mainAuthor.substring(0, 3).toUpperCase();
+
+  // 3. Ambil 1 huruf kecil judul pertama (abaikan kata sambung umum)
+  const cleanTitle = title.replace(/^(Seri|Kumpulan|Buku|Cerita|Si|Sang|The|A|An)\s+/i, '').trim();
+  const titleCode = (cleanTitle[0] || 'b').toLowerCase();
+
+  return `${ddc} ${authorCode} ${titleCode}`;
+}
+
+// Berita & Pengumuman Perpustakaan Resmi SBTH (CMS Ringkas)
+export const DEFAULT_LIBRARY_NEWS: import('@/types').LibraryNewsArticle[] = [
+  {
+    id: 'news-1',
+    title: '🎉 Selamat Datang di Perpustakaan Cerdas KB-TK SBTH!',
+    summary: 'Sistem sirkulasi mandiri ramah anak, scan barcode fisik, dan katalog buku impian telah aktif.',
+    content: 'Perpustakaan KB-TK Bhakti Tunas Harapan kini menggunakan sistem sirkulasi modern terintegrasi. Siswa dapat melihat buku cerita favorit dan menambahkan ke Buku Impian.',
+    category: 'ANNOUNCEMENT',
+    badgeText: 'PENGUMUMAN RESMI',
+    publishedDate: '2026-10-15',
+    isPinned: true,
+    isActive: true,
+    author: 'Pustakawan KB-TK SBTH',
+  },
+  {
+    id: 'news-2',
+    title: '📚 Jadwal Layanan Sirkulasi & Peminjaman Buku Cerita',
+    summary: 'Peminjaman buku cerita setiap hari Senin - Jumat pukul 07.30 - 13.00 WIB.',
+    content: 'Ananda diperkenankan meminjam hingga 2 buku cerita selama 7 hari. Bagi orang tua yang ingin memperpanjang masa pinjam dapat menghubungi Pustakawan via WhatsApp atau tombol Perpanjangan.',
+    category: 'NEW_BOOKS',
+    badgeText: 'INFO SIRKULASI',
+    publishedDate: '2026-10-12',
+    isPinned: false,
+    isActive: true,
+    author: 'Tim Literasi Sekolah',
+  },
+  {
+    id: 'news-3',
+    title: '🔍 Pelaksanaan Stock Opname & Penataan Ulang Rak Buku',
+    summary: 'Kegiatan cacah ulang fisik koleksi buku untuk memastikan ketersediaan buku di rak.',
+    content: 'Seluruh koleksi buku cerita anak ditata rapi berdasarkan kategori warna stiker rak (Kuning, Hijau, Biru, Merah, Pink, Ungu).',
+    category: 'STOCK_OPNAME',
+    badgeText: 'STOCK OPNAME',
+    publishedDate: '2026-10-10',
+    isPinned: false,
+    isActive: true,
+    author: 'Penanggung Jawab Perpustakaan',
+  },
+];
 
 export const DEFAULT_TELEGRAM_TEMPLATES: import('@/types').TelegramCommandTemplate[] = [
   {

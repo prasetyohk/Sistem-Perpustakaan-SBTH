@@ -26,6 +26,9 @@ import {
   ActivityLogEntry,
   ShelfLocationItem,
   WhatsAppReminderTemplate,
+  Reservation,
+  LibraryNewsArticle,
+  SlimsPatternConfig,
 } from '@/types';
 import {
   INITIAL_BOOKS,
@@ -42,6 +45,9 @@ import {
   DEFAULT_TELEGRAM_TEMPLATES,
   DEFAULT_SHELVES,
   DEFAULT_WHATSAPP_TEMPLATES,
+  DEFAULT_SLIMS_PATTERN,
+  DEFAULT_LIBRARY_NEWS,
+  generateSlimsCallNumber,
 } from './constants';
 import * as XLSX from 'xlsx';
 
@@ -71,6 +77,9 @@ const STORAGE_KEYS = {
   SHELVES: 'sbth_library_shelves_v1',
   WHATSAPP_TEMPLATES: 'sbth_library_whatsapp_templates_v1',
   ACTIVITY_LOGS: 'sbth_library_activity_logs_v1',
+  RESERVATIONS: 'sbth_library_reservations_v1',
+  LIBRARY_NEWS: 'sbth_library_news_v1',
+  SLIMS_PATTERN: 'sbth_library_slims_pattern_v1',
 };
 
 export class LibraryStore {
@@ -125,6 +134,7 @@ export class LibraryStore {
         const initialMatch = INITIAL_BOOKS.find((ib) => ib.id === b.id);
         const shouldUpdate =
           isBrokenCover ||
+          !b.callNumber ||
           (!b.pageCount && initialMatch?.pageCount) ||
           (!b.bookLanguage && initialMatch?.bookLanguage) ||
           (!b.physicalFormat && initialMatch?.physicalFormat) ||
@@ -134,6 +144,7 @@ export class LibraryStore {
           hasChanges = true;
           return {
             ...b,
+            callNumber: b.callNumber || generateSlimsCallNumber(b.title, b.author, b.categoryId),
             coverImage: isBrokenCover ? '' : b.coverImage,
             pageCount: b.pageCount || initialMatch?.pageCount,
             bookLanguage: b.bookLanguage || initialMatch?.bookLanguage || 'id',
@@ -222,25 +233,6 @@ export class LibraryStore {
     items[idx] = updatedItem;
     this.saveBookItems(items);
     return updatedItem;
-  }
-
-  // Generate next sequential barcode e.g. "SBTH-B-00125"
-  public generateNextItemBarcode(): string {
-    const items = this.getBookItems();
-    let maxNumber = 100;
-
-    items.forEach((item) => {
-      const match = item.itemBarcode.match(/SBTH-B-(\d+)/i);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
-        }
-      }
-    });
-
-    const next = maxNumber + 1;
-    return `SBTH-B-${next.toString().padStart(5, '0')}`;
   }
 
   // Add Book + Sequential Physical Copies (supports donorName and priceValue)
@@ -2324,6 +2316,343 @@ Periode: Minggu ke-2 Oktober 2026
       actor: record.auditedBy || 'Pustakawan',
       details: `Menyelesaikan audit stock opname fisik perpustakaan: ${record.matchedCount}/${record.totalBooksAudited} eksemplar terverifikasi cocok.`,
     });
+  }
+
+  // --- PERPANJANGAN PINJAMAN (RENEWAL SYSTEM) ---
+  public renewLoan(
+    loanId: string,
+    additionalDays?: number,
+    handledBy: string = 'Pustakawan'
+  ): { success: boolean; message: string; newDueDate?: string } {
+    if (!this.isClient()) return { success: false, message: 'Server environment' };
+    const loans = this.getLoans();
+    const loanIndex = loans.findIndex((l) => l.id === loanId);
+    if (loanIndex === -1) {
+      return { success: false, message: 'Data transaksi peminjaman tidak ditemukan.' };
+    }
+
+    const loan = loans[loanIndex];
+    if (loan.status === 'RETURNED') {
+      return { success: false, message: 'Buku sudah dikembalikan, tidak dapat diperpanjang.' };
+    }
+
+    const rules = this.getLoanRules();
+    const member = this.getMembers().find((m) => m.id === loan.memberId);
+    const memberType = member?.type || 'STUDENT';
+    const typeRule = rules.memberTypeRules?.find((r) => r.memberType === memberType);
+    const maxRenewals = typeRule?.maxRenewals ?? rules.maxRenewals ?? 1;
+
+    const currentRenewals = loan.renewalCount || 0;
+    if (currentRenewals >= maxRenewals) {
+      return {
+        success: false,
+        message: `Batas perpanjangan maksimal (${maxRenewals}x) untuk ${typeRule?.label || 'tipe anggota ini'} telah tercapai. Buku harus dikembalikan untuk memberi kesempatan pembaca lain.`,
+      };
+    }
+
+    // Hitung tanggal jatuh tempo baru
+    const daysToAdd = additionalDays || typeRule?.loanDurationDays || rules.renewalDurationDays || 7;
+    const baseDueDate = new Date(loan.dueDate);
+    const now = new Date();
+    // Jika sudah terlambat, perpanjangan dihitung dari hari ini
+    const startingPoint = now > baseDueDate ? now : baseDueDate;
+    const newDueDateObj = new Date(startingPoint.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const newDueDateStr = newDueDateObj.toISOString().split('T')[0];
+
+    loan.dueDate = newDueDateStr;
+    loan.status = 'ACTIVE';
+    loan.renewalCount = currentRenewals + 1;
+    loan.lastRenewedAt = new Date().toISOString().split('T')[0];
+    loans[loanIndex] = loan;
+    this.saveLoans(loans);
+
+    const bookTitles = loan.items.map((i) => i.bookTitle).join(', ');
+    this.addActivityLog({
+      category: 'CIRCULATION',
+      action: 'PERPANJANG_PINJAM',
+      actor: handledBy,
+      targetMember: member?.name || loan.memberId,
+      targetTitle: bookTitles,
+      details: `Perpanjangan masa pinjam ke-${loan.renewalCount} (+${daysToAdd} hari). Jatuh tempo baru: ${newDueDateStr}.`,
+    });
+
+    return {
+      success: true,
+      message: `Perpanjangan berhasil! Jatuh tempo baru telah diperbarui menjadi ${newDueDateStr}.`,
+      newDueDate: newDueDateStr,
+    };
+  }
+
+  // --- RESERVASI / BOOKING BUKU (SLiMS STYLE) ---
+  public getReservations(): Reservation[] {
+    if (!this.isClient()) return [];
+    const raw = localStorage.getItem(STORAGE_KEYS.RESERVATIONS);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public saveReservations(reservations: Reservation[]): void {
+    if (!this.isClient()) return;
+    localStorage.setItem(STORAGE_KEYS.RESERVATIONS, JSON.stringify(reservations));
+  }
+
+  public createReservation(
+    bookId: string,
+    memberId: string,
+    handledBy: string = 'Mandiri'
+  ): { success: boolean; message: string; reservation?: Reservation } {
+    if (!this.isClient()) return { success: false, message: 'Server environment' };
+    const book = this.getBooks().find((b) => b.id === bookId);
+    const member = this.getMembers().find((m) => m.id === memberId);
+    if (!book || !member) {
+      return { success: false, message: 'Data buku atau anggota tidak valid.' };
+    }
+
+    const reservations = this.getReservations();
+    // Cek apakah siswa sudah punya antrean aktif untuk buku ini
+    const existing = reservations.find(
+      (r) =>
+        r.bookId === bookId &&
+        r.memberId === memberId &&
+        (r.status === 'PENDING' || r.status === 'READY_FOR_PICKUP')
+    );
+    if (existing) {
+      return {
+        success: false,
+        message: 'Ananda sudah memiliki antrean reservasi aktif untuk buku ini.',
+      };
+    }
+
+    const rules = this.getLoanRules();
+    const expiryHours = rules.reservationExpiryHours || 24;
+    const now = new Date();
+    const expiry = new Date(now.getTime() + expiryHours * 3600000);
+
+    const newRes: Reservation = {
+      id: `res-${Date.now().toString(36)}`,
+      bookId: book.id,
+      bookTitle: book.title,
+      bookAuthor: book.author,
+      coverImage: book.coverImage,
+      memberId: member.id,
+      memberName: member.name,
+      memberClass: member.classGroup,
+      parentPhone: member.parentPhone,
+      requestDate: now.toISOString(),
+      expiryDate: expiry.toISOString(),
+      status: 'PENDING',
+      handledBy,
+    };
+
+    const updated = [newRes, ...reservations];
+    this.saveReservations(updated);
+
+    this.addActivityLog({
+      category: 'CIRCULATION',
+      action: 'RESERVASI_BUKU',
+      actor: member.name,
+      targetMember: member.name,
+      targetTitle: book.title,
+      details: `Reservasi antrean buku cerita "${book.title}" berhasil dicatat.`,
+    });
+
+    return {
+      success: true,
+      message: `Buku "${book.title}" berhasil direservasi! Begitu buku dikembalikan ke perpustakaan, sistem akan mengamankannya untuk ananda selama ${expiryHours} jam.`,
+      reservation: newRes,
+    };
+  }
+
+  public cancelReservation(reservationId: string, reason: string = 'Dibatalkan'): void {
+    if (!this.isClient()) return;
+    const reservations = this.getReservations();
+    const idx = reservations.findIndex((r) => r.id === reservationId);
+    if (idx !== -1) {
+      reservations[idx].status = 'CANCELLED';
+      reservations[idx].notes = reason;
+      this.saveReservations(reservations);
+    }
+  }
+
+  public fulfillReservation(reservationId: string): void {
+    if (!this.isClient()) return;
+    const reservations = this.getReservations();
+    const idx = reservations.findIndex((r) => r.id === reservationId);
+    if (idx !== -1) {
+      reservations[idx].status = 'FULFILLED';
+      this.saveReservations(reservations);
+    }
+  }
+
+  public checkBookReservationsOnReturn(bookId: string): Reservation | null {
+    if (!this.isClient()) return null;
+    const reservations = this.getReservations();
+    // Cari reservasi PENDING pertama
+    const pendingRes = reservations.find((r) => r.bookId === bookId && r.status === 'PENDING');
+    if (!pendingRes) return null;
+
+    const rules = this.getLoanRules();
+    const expiryHours = rules.reservationExpiryHours || 24;
+    const expiry = new Date(Date.now() + expiryHours * 3600000);
+
+    pendingRes.status = 'READY_FOR_PICKUP';
+    pendingRes.expiryDate = expiry.toISOString();
+    pendingRes.notifiedAt = new Date().toISOString();
+    this.saveReservations(reservations);
+
+    this.addActivityLog({
+      category: 'CIRCULATION',
+      action: 'RESERVASI_SIAP_AMBIL',
+      actor: 'Sistem Perpustakaan',
+      targetMember: pendingRes.memberName,
+      targetTitle: pendingRes.bookTitle,
+      details: `Buku "${pendingRes.bookTitle}" telah kembali dan siap diambil oleh ${pendingRes.memberName} (Batas: ${expiryHours} jam).`,
+    });
+
+    return pendingRes;
+  }
+
+  // --- POLA PENAMAAN KODE EKSEMPLAR SLIMS (PATTERN GENERATOR) ---
+  public getSlimsPattern(): SlimsPatternConfig {
+    if (!this.isClient()) return DEFAULT_SLIMS_PATTERN;
+    const raw = localStorage.getItem(STORAGE_KEYS.SLIMS_PATTERN);
+    if (!raw) {
+      this.saveSlimsPattern(DEFAULT_SLIMS_PATTERN);
+      return DEFAULT_SLIMS_PATTERN;
+    }
+    try {
+      return { ...DEFAULT_SLIMS_PATTERN, ...JSON.parse(raw) };
+    } catch {
+      return DEFAULT_SLIMS_PATTERN;
+    }
+  }
+
+  public saveSlimsPattern(config: SlimsPatternConfig): void {
+    if (!this.isClient()) return;
+    localStorage.setItem(STORAGE_KEYS.SLIMS_PATTERN, JSON.stringify(config));
+  }
+
+  public generateNextItemBarcode(categoryId?: string): string {
+    const pattern = this.getSlimsPattern();
+    let prefix = pattern.prefix || 'SBTH-B-';
+
+    if (pattern.patternMode === 'SLIMS_STANDARD') {
+      prefix = 'B';
+    } else if (pattern.patternMode === 'CATEGORY_BASED' && categoryId) {
+      const catCode = categoryId.replace('cat-', '').substring(0, 3).toUpperCase();
+      prefix = `${catCode}-`;
+    }
+
+    const numStr = String(pattern.nextNumber).padStart(pattern.serialLength || 5, '0');
+    const suffix = pattern.suffix || '';
+    const barcode = `${prefix}${numStr}${suffix}`;
+
+    // Naikkan nomor berikutnya
+    pattern.nextNumber += 1;
+    this.saveSlimsPattern(pattern);
+    return barcode;
+  }
+
+  // --- SISTEM MANAJEMEN KONTEN (CMS BERITA & PENGUMUMAN) ---
+  public getLibraryNews(): LibraryNewsArticle[] {
+    if (!this.isClient()) return DEFAULT_LIBRARY_NEWS;
+    const raw = localStorage.getItem(STORAGE_KEYS.LIBRARY_NEWS);
+    if (!raw) {
+      this.saveLibraryNews(DEFAULT_LIBRARY_NEWS);
+      return DEFAULT_LIBRARY_NEWS;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_LIBRARY_NEWS;
+    } catch {
+      return DEFAULT_LIBRARY_NEWS;
+    }
+  }
+
+  public saveLibraryNews(articles: LibraryNewsArticle[]): void {
+    if (!this.isClient()) return;
+    localStorage.setItem(STORAGE_KEYS.LIBRARY_NEWS, JSON.stringify(articles));
+  }
+
+  public addLibraryNews(article: Omit<LibraryNewsArticle, 'id'>): LibraryNewsArticle {
+    const news = this.getLibraryNews();
+    const newArticle: LibraryNewsArticle = {
+      ...article,
+      id: `news-${Date.now().toString(36)}`,
+    };
+    const updated = [newArticle, ...news];
+    this.saveLibraryNews(updated);
+    return newArticle;
+  }
+
+  public updateLibraryNews(article: LibraryNewsArticle): void {
+    const news = this.getLibraryNews();
+    const idx = news.findIndex((n) => n.id === article.id);
+    if (idx !== -1) {
+      news[idx] = article;
+      this.saveLibraryNews(news);
+    }
+  }
+
+  public deleteLibraryNews(id: string): void {
+    const news = this.getLibraryNews();
+    const updated = news.filter((n) => n.id !== id);
+    this.saveLibraryNews(updated);
+  }
+
+  // --- EKSPOR KOLEKSI FORMAT SLIMS (KOMPATIBEL CSV / EXCEL) ---
+  public exportSlimsCsv(): string {
+    const books = this.getBooks();
+    const items = this.getBookItems();
+
+    const headers = [
+      'item_code',
+      'title',
+      'author',
+      'publisher',
+      'publish_year',
+      'isbn',
+      'call_number',
+      'classification',
+      'location',
+      'status',
+      'source',
+      'price_value',
+    ];
+
+    const rows: string[] = [headers.join(',')];
+
+    items.forEach((item) => {
+      const book = books.find((b) => b.id === item.bookId);
+      if (!book) return;
+
+      const callNo = book.callNumber || generateSlimsCallNumber(book.title, book.author, book.categoryId);
+      const safe = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+      rows.push(
+        [
+          safe(item.itemBarcode),
+          safe(book.title),
+          safe(book.author),
+          safe(book.publisher),
+          safe(book.publicationYear),
+          safe(book.isbn),
+          safe(callNo),
+          safe(book.classification || callNo.split(' ')[0]),
+          safe(item.shelfLocation || book.shelfLocation || 'Rak Utama'),
+          safe(item.status),
+          safe(item.source || 'BELI_SEKOLAH'),
+          safe(item.priceValue ?? book.priceValue ?? 0),
+        ].join(',')
+      );
+    });
+
+    return rows.join('\r\n');
   }
 
   public resetToDefault(): void {

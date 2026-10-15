@@ -30,11 +30,18 @@ import {
   LayoutGrid,
   List,
   Zap,
+  Bookmark,
+  BookmarkPlus,
+  Newspaper,
+  Layers,
+  ChevronRightCircle,
+  Tag,
 } from 'lucide-react';
-import { Book, CategoryId, AgeGroup, Category, SchoolProfile, WishlistNotification, Language } from '@/types';
+import { Book, CategoryId, AgeGroup, Category, SchoolProfile, WishlistNotification, Language, LibraryNewsArticle, Reservation } from '@/types';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
 import { DICTIONARY } from '@/lib/i18n';
+import { generateSlimsCallNumber } from '@/lib/constants';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
 
 interface KidsVisualOpacProps {
@@ -71,7 +78,22 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
   const [selectedAgePickTab, setSelectedAgePickTab] = useState<'PLAYGROUP' | 'TK_A' | 'TK_B'>('TK_A');
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
 
+  // ✨ UX Consolidation: Tabbed highlights ('NEW' | 'POPULAR' | 'AGE') & Accordion state
+  const [activeHighlightTab, setActiveHighlightTab] = useState<'NEW' | 'POPULAR' | 'AGE'>('NEW');
+  const [isHighlightsMinimized, setIsHighlightsMinimized] = useState<boolean>(false);
+
+  // 📢 CMS Library News
+  const [libraryNews, setLibraryNews] = useState<LibraryNewsArticle[]>([]);
+  const [activeNewsArticle, setActiveNewsArticle] = useState<LibraryNewsArticle | null>(null);
+
+  // 📌 Book Reservation state
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState<boolean>(false);
+  const [reservationBook, setReservationBook] = useState<Book | null>(null);
+  const [selectedResMemberId, setSelectedResMemberId] = useState<string>('');
+  const [reservationNotice, setReservationNotice] = useState<string | null>(null);
+
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null);
+  const catalogSectionRef = useRef<HTMLDivElement>(null);
 
   const books = libraryStore.getBooks();
   const allItems = libraryStore.getBookItems();
@@ -161,7 +183,15 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
     setWishlist(libraryStore.getWishlist());
     setSchoolProfile(libraryStore.getSchoolProfile());
     setWishlistNotifs(libraryStore.getWishlistNotifications());
+    setLibraryNews(libraryStore.getLibraryNews());
   }, []);
+
+  // Auto-minimize highlights when searching or selecting quick search tags
+  useEffect(() => {
+    if (searchQuery.trim().length > 0) {
+      setIsHighlightsMinimized(true);
+    }
+  }, [searchQuery]);
 
   // Compute borrow counts per book
   const borrowCountMap: Record<string, number> = {};
@@ -438,6 +468,49 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                   </button>
                 ))}
               </div>
+
+              {/* 📊 Embedded Statistics Badges (Sleek, Compact, No Scroll Waste) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-white/20 mt-3">
+                <div className="p-2 rounded-xl bg-black/20 backdrop-blur-md border border-white/15">
+                  <div className="flex items-center gap-1.5 text-white/80 text-[10px] font-semibold">
+                    <BookOpen className="h-3 w-3 text-amber-200" />
+                    <span>Total Koleksi</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold font-display text-white mt-0.5">
+                    {totalTitles} <span className="text-[10px] font-normal text-white/70">Judul</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-black/20 backdrop-blur-md border border-white/15">
+                  <div className="flex items-center gap-1.5 text-emerald-200 text-[10px] font-semibold">
+                    <CheckCircle className="h-3 w-3 text-emerald-300" />
+                    <span>Tersedia di Rak</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold font-display text-emerald-300 mt-0.5">
+                    {availableCopies} <span className="text-[10px] font-normal text-white/70">Buku</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-black/20 backdrop-blur-md border border-white/15">
+                  <div className="flex items-center gap-1.5 text-amber-200 text-[10px] font-semibold">
+                    <Clock className="h-3 w-3 text-amber-300" />
+                    <span>Sedang Dipinjam</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold font-display text-amber-300 mt-0.5">
+                    {borrowedCopies} <span className="text-[10px] font-normal text-white/70">Buku</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-black/20 backdrop-blur-md border border-white/15">
+                  <div className="flex items-center gap-1.5 text-sky-200 text-[10px] font-semibold">
+                    <Users className="h-3 w-3 text-sky-300" />
+                    <span>Anggota Aktif</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold font-display text-white mt-0.5">
+                    {activeMembers} <span className="text-[10px] font-normal text-white/70">Siswa & Guru</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -594,232 +667,394 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
       </div>
 
       {/* =========================================================================
-          2. SUMMARY STATS STRIP (4 Mini Cards: Modern, No Colorful Borders, Soft)
+          2. CMS LIBRARY NEWS & ANNOUNCEMENT TICKER (If active announcements exist)
           ========================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        {/* Total Judul */}
-        <div className="rounded-2xl p-4 bg-surface border border-border shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-muted">Total Judul Buku</span>
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-500">
-              <BookOpen className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-text">
-              {totalTitles}
-            </span>
-            <span className="text-xs text-text-muted">Judul</span>
-          </div>
+      {libraryNews.filter((n) => n.isActive).length > 0 && (
+        <div className="space-y-2">
+          {libraryNews
+            .filter((n) => n.isActive)
+            .slice(0, 1)
+            .map((news) => (
+              <div
+                key={news.id}
+                onClick={() => {
+                  setActiveNewsArticle(news);
+                  soundFx.playScanBeep();
+                }}
+                className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-surface-2 border border-amber-500/30 flex items-center justify-between gap-3 shadow-xs hover:border-amber-500/60 transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-8 w-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition">
+                    <Newspaper className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                        {news.category === 'HOLIDAY'
+                          ? 'Libur / Tutup'
+                          : news.category === 'STOCK_OPNAME'
+                          ? 'Stock Opname'
+                          : news.category === 'EVENT'
+                          ? 'Agenda / Event'
+                          : 'Pengumuman Resmi'}
+                      </span>
+                      <span className="text-[10px] text-text-muted">• {news.publishedDate}</span>
+                    </div>
+                    <p className="text-xs font-bold text-text truncate group-hover:text-amber-500 transition">
+                      {news.title}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 text-amber-500 text-xs font-semibold">
+                  <span className="hidden sm:inline">Baca Info</span>
+                  <ChevronRightCircle className="h-4 w-4" />
+                </div>
+              </div>
+            ))}
         </div>
-
-        {/* Eksemplar Tersedia */}
-        <div className="rounded-2xl p-4 bg-surface border border-border shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-muted">Eksemplar Tersedia</span>
-            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-500">
-              <CheckCircle className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-emerald-500">
-              {availableCopies}
-            </span>
-            <span className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Di Rak</span>
-          </div>
-        </div>
-
-        {/* Sedang Dipinjam */}
-        <div className="rounded-2xl p-4 bg-surface border border-border shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-muted">Sedang Dipinjam</span>
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-500">
-              <Clock className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-amber-500">
-              {borrowedCopies}
-            </span>
-            <span className="text-xs text-amber-600/80 dark:text-amber-400/80">Dipinjam</span>
-          </div>
-        </div>
-
-        {/* Anggota Aktif */}
-        <div className="rounded-2xl p-4 bg-surface border border-border shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-muted">Anggota Aktif</span>
-            <div className="p-2 rounded-xl bg-sky-500/15 text-sky-500">
-              <Users className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-text">
-              {activeMembers}
-            </span>
-            <span className="text-xs text-text-muted">Siswa & Guru</span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* =========================================================================
-          3. NEW ARRIVALS: HORIZONTAL CAROUSEL (Scroll-Snap + Arrow Buttons)
+          3. CONSOLIDATED TABBED HIGHLIGHTS CAROUSEL (New Arrivals, Popular, Age Picks)
+          Equipped with Accordion Minimize / Expand to prevent Scroll Fatigue!
           ========================================================================= */}
-      {newArrivals.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-500">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg sm:text-xl font-bold font-display tracking-tight text-text">
-                    {t.newArrivals}
-                  </h2>
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                    {newArrivals.length} Buku Baru
-                  </span>
-                </div>
-                <p className="text-xs text-text-muted mt-0.5">
-                  {t.newArrivalsSub}
-                </p>
-              </div>
+      {isHighlightsMinimized ? (
+        /* Minimized Compact Accordion Bar */
+        <div
+          onClick={() => {
+            setIsHighlightsMinimized(false);
+            soundFx.playScanBeep();
+          }}
+          className="rounded-2xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 p-3.5 flex items-center justify-between transition cursor-pointer shadow-xs group"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 shadow-xs">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="text-xs sm:text-sm font-bold text-text group-hover:text-amber-500 transition">
+                ✨ Sorotan Buku, Kategori Rak & Rekomendasi Usia (Mode Ringkas Tersembunyi)
+              </span>
+              <p className="text-[11px] text-text-muted">
+                Klik untuk membuka carousel rekomendasi Baru Masuk ({newArrivals.length}), Paling Sering Dipinjam & Sesuai Usia
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-3.5 py-1.5 rounded-xl bg-surface border border-border text-xs font-bold text-amber-500 flex items-center gap-1.5 shadow-2xs group-hover:bg-amber-500 group-hover:text-slate-950 transition"
+          >
+            <span>Buka Sorotan</span>
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        /* Full Consolidated Tabbed Carousel Block */
+        <div className="rounded-3xl border border-border bg-surface p-4 sm:p-5 shadow-xs space-y-4 transition animate-in fade-in">
+          {/* Header Bar: Tab Switcher (Left) + Arrows & Minimize Button (Right) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-3">
+            {/* Tab Switcher */}
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-surface-2 border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveHighlightTab('NEW');
+                  soundFx.playScanBeep();
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeHighlightTab === 'NEW'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Baru Masuk ({newArrivals.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveHighlightTab('POPULAR');
+                  soundFx.playScanBeep();
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeHighlightTab === 'POPULAR'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+              >
+                <Award className="h-3.5 w-3.5" />
+                <span>Paling Favorit 🔥</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveHighlightTab('AGE');
+                  soundFx.playScanBeep();
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeHighlightTab === 'AGE'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-text-muted hover:text-text'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Sesuai Usia 👶</span>
+              </button>
             </div>
 
-            {/* Carousel navigation arrow buttons */}
-            <div className="flex items-center gap-1.5">
+            {/* Right Action: Scroll buttons + Minimize Accordion */}
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel('left')}
+                  className="h-8 w-8 rounded-xl bg-surface-2 border border-border hover:bg-surface text-text flex items-center justify-center transition active:scale-95 shadow-2xs"
+                  title="Geser ke kiri"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel('right')}
+                  className="h-8 w-8 rounded-xl bg-surface-2 border border-border hover:bg-surface text-text flex items-center justify-center transition active:scale-95 shadow-2xs"
+                  title="Geser ke kanan"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => scrollCarousel('left')}
-                className="h-9 w-9 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text flex items-center justify-center transition active:scale-95 shadow-xs"
-                title="Geser ke kiri"
+                onClick={() => {
+                  setIsHighlightsMinimized(true);
+                  soundFx.playScanBeep();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-surface-2 border border-border hover:border-amber-500/50 text-xs font-bold text-text-muted hover:text-text flex items-center gap-1 transition shadow-2xs"
+                title="Sembunyikan sorotan agar katalog langsung terlihat"
               >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollCarousel('right')}
-                className="h-9 w-9 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text flex items-center justify-center transition active:scale-95 shadow-xs"
-                title="Geser ke kanan"
-              >
-                <ChevronRight className="h-4 w-4" />
+                <span>Sembunyikan</span>
+                <ChevronUp className="h-3.5 w-3.5 text-amber-500" />
               </button>
             </div>
           </div>
 
-          {/* Horizontal Scroll Snap Container */}
-          <div
-            ref={newArrivalsScrollRef}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 pt-1 no-scrollbar"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {newArrivals.map((b) => {
-              const items = allItems.filter((i) => i.bookId === b.id);
-              const availableCount = items.filter((i) => i.status === 'AVAILABLE').length;
-
-              return (
-                <div
-                  key={`carousel-${b.id}`}
+          {/* Sub-Age Switcher if AGE tab active */}
+          {activeHighlightTab === 'AGE' && (
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-text-muted">Pilih Jenjang:</span>
+              {[
+                { id: 'PLAYGROUP', label: '👶 Toddler / KB (2-3 th)' },
+                { id: 'TK_A', label: '🧒 TK-A (4-5 th)' },
+                { id: 'TK_B', label: '👦 TK-B (5-6 th)' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
                   onClick={() => {
-                    setActiveModalBook(b);
+                    setSelectedAgePickTab(tab.id as any);
                     soundFx.playScanBeep();
                   }}
-                  className="w-48 sm:w-52 shrink-0 snap-start group cursor-pointer rounded-2xl bg-surface border border-border hover:border-amber-500/50 p-3 transition transform hover:-translate-y-1.5 hover:shadow-lg flex flex-col justify-between"
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                    selectedAgePickTab === tab.id
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-surface-2 text-text-muted hover:text-text border border-border'
+                  }`}
                 >
-                  <div className="relative aspect-3/4 w-full rounded-xl overflow-hidden bg-slate-900 shadow-xs">
-                    <SmartBookCover
-                      title={b.title}
-                      author={b.author}
-                      coverUrl={b.coverImage}
-                      categoryId={b.categoryId}
-                      aspectRatio="h-full w-full"
-                    />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
 
-                    {/* Book spine depth shadow */}
-                    <div className="absolute inset-y-0 left-0 w-2.5 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" />
+          {/* Horizontal Carousel Content Container */}
+          <div
+            ref={newArrivalsScrollRef}
+            className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory pb-2 pt-1 no-scrollbar"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {activeHighlightTab === 'NEW' &&
+              newArrivals.map((b) => {
+                const items = allItems.filter((i) => i.bookId === b.id);
+                const availableCount = items.filter((i) => i.status === 'AVAILABLE').length;
 
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-bold text-[9px] shadow-sm uppercase tracking-wide">
-                      Baru Masuk
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleWishlist(b.id, e)}
-                      className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition active:scale-125"
-                      title="Simpan ke Buku Impian"
-                    >
-                      <Heart
-                        className={`h-3.5 w-3.5 ${
-                          wishlist.includes(b.id) ? 'fill-rose-500 text-rose-500' : ''
-                        }`}
+                return (
+                  <div
+                    key={`carousel-new-${b.id}`}
+                    onClick={() => {
+                      setActiveModalBook(b);
+                      soundFx.playScanBeep();
+                    }}
+                    className="w-40 sm:w-44 shrink-0 snap-start group cursor-pointer rounded-2xl bg-surface-2 border border-border hover:border-amber-500/60 p-2.5 transition transform hover:-translate-y-1 hover:shadow-md flex flex-col justify-between"
+                  >
+                    <div className="relative aspect-3/4 w-full rounded-xl overflow-hidden bg-slate-900 shadow-xs">
+                      <SmartBookCover
+                        title={b.title}
+                        author={b.author}
+                        coverUrl={b.coverImage}
+                        categoryId={b.categoryId}
+                        aspectRatio="h-full w-full"
                       />
-                    </button>
-                  </div>
-
-                  <div className="mt-2.5 text-left flex flex-col justify-between flex-1">
-                    <div>
-                      <h4 className="text-xs font-semibold text-text line-clamp-2 group-hover:text-amber-500 transition leading-snug">
-                        {b.title}
-                      </h4>
-                      <p className="text-[11px] text-text-muted truncate mt-0.5">
-                        {b.author}
-                      </p>
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between pt-2 border-t border-border/60">
-                      {availableCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                          <CheckCircle className="h-2.5 w-2.5" />
-                          Ada ({availableCount})
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                          <Clock className="h-2.5 w-2.5" />
-                          Dipinjam
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono text-text-muted">
-                        {b.publicationYear}
+                      <div className="absolute inset-y-0 left-0 w-2 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" />
+                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-amber-500 text-slate-950 font-bold text-[8px] shadow-xs uppercase tracking-wide">
+                        Baru
                       </span>
                     </div>
+
+                    <div className="mt-2 text-left flex flex-col justify-between flex-1">
+                      <div>
+                        <h4 className="text-xs font-semibold text-text line-clamp-1 group-hover:text-amber-500 transition leading-snug">
+                          {b.title}
+                        </h4>
+                        <p className="text-[10px] text-text-muted truncate mt-0.5">
+                          {b.author}
+                        </p>
+                      </div>
+
+                      <div className="mt-1.5 flex items-center justify-between pt-1.5 border-t border-border/60 text-[10px]">
+                        <span className={availableCount > 0 ? 'text-emerald-500 font-bold' : 'text-amber-500 font-medium'}>
+                          {availableCount > 0 ? `Ada (${availableCount})` : 'Dipinjam'}
+                        </span>
+                        <span className="font-mono text-text-muted">{b.publicationYear}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+
+            {activeHighlightTab === 'POPULAR' &&
+              topBorrowedBooks.map(({ book, borrowCount }, idx) => {
+                const bCount = borrowCount || borrowCountMap[book.id] || 0;
+                const medals = ['🥇', '🥈', '🥉', '#4', '#5'];
+
+                return (
+                  <div
+                    key={`carousel-pop-${book.id}`}
+                    onClick={() => {
+                      setActiveModalBook(book);
+                      soundFx.playScanBeep();
+                    }}
+                    className="w-40 sm:w-44 shrink-0 snap-start group cursor-pointer rounded-2xl bg-surface-2 border border-border hover:border-amber-500/60 p-2.5 transition transform hover:-translate-y-1 hover:shadow-md relative flex flex-col justify-between"
+                  >
+                    <div className="absolute top-1.5 left-1.5 z-10 h-6 w-6 rounded-lg bg-slate-900/90 text-white flex items-center justify-center font-bold text-[10px] shadow-sm border border-white/20">
+                      {medals[idx] || `#${idx + 1}`}
+                    </div>
+
+                    <div className="relative aspect-3/4 rounded-xl overflow-hidden bg-slate-900 shadow-xs">
+                      <SmartBookCover
+                        title={book.title}
+                        author={book.author}
+                        coverUrl={book.coverImage}
+                        categoryId={book.categoryId}
+                        aspectRatio="h-full w-full"
+                      />
+                      <div className="absolute inset-y-0 left-0 w-2 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" />
+                    </div>
+
+                    <div className="mt-2 text-left">
+                      <h4 className="text-xs font-semibold text-text line-clamp-1 group-hover:text-amber-500 transition leading-snug">
+                        {book.title}
+                      </h4>
+                      <div className="mt-1 flex items-center justify-between text-[10px]">
+                        <span className="text-text-muted truncate max-w-[80px]">{book.author}</span>
+                        <span className="font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.2 rounded-md">
+                          {bCount}x
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {activeHighlightTab === 'AGE' &&
+              agePickBooks.map((book) => {
+                const items = allItems.filter((i) => i.bookId === book.id);
+                const availableCount = items.filter((i) => i.status === 'AVAILABLE').length;
+
+                return (
+                  <div
+                    key={`carousel-age-${book.id}`}
+                    onClick={() => {
+                      setActiveModalBook(book);
+                      soundFx.playScanBeep();
+                    }}
+                    className="w-40 sm:w-44 shrink-0 snap-start group cursor-pointer rounded-2xl bg-surface-2 border border-border hover:border-amber-500/60 p-2.5 transition transform hover:-translate-y-1 hover:shadow-md flex flex-col justify-between"
+                  >
+                    <div className="relative aspect-3/4 rounded-xl overflow-hidden bg-slate-900 shadow-xs">
+                      <SmartBookCover
+                        title={book.title}
+                        author={book.author}
+                        coverUrl={book.coverImage}
+                        categoryId={book.categoryId}
+                        aspectRatio="h-full w-full"
+                      />
+                      <div className="absolute inset-y-0 left-0 w-2 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
+                    </div>
+
+                    <div className="mt-2 text-left">
+                      <h4 className="text-xs font-semibold text-text line-clamp-1 group-hover:text-amber-500 transition leading-snug">
+                        {book.title}
+                      </h4>
+                      <div className="mt-1 flex items-center justify-between text-[10px]">
+                        <span className="text-text-muted truncate max-w-[80px]">{book.author}</span>
+                        <span className={availableCount > 0 ? 'text-emerald-500 font-bold' : 'text-amber-500 font-medium'}>
+                          {availableCount > 0 ? `Ada (${availableCount})` : 'Dipinjam'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          4. CATEGORY CARDS (10% Tint, Real Shelf Name, "Segera hadir" for 0 books)
+          4. HORIZONTAL CATEGORY SHELF PILLS (Compact, One-Row, Above Catalog)
           ========================================================================= */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500">
-              <BookMarked className="h-4 w-4" />
-            </div>
-            <h2 className="text-base sm:text-lg font-bold font-display text-text">
-              Kategori Rak Buku
-            </h2>
-          </div>
+          <span className="text-xs font-bold text-text flex items-center gap-1.5">
+            <Tag className="h-3.5 w-3.5 text-amber-500" />
+            <span>Kategori Rak Buku (Filter Cepat):</span>
+          </span>
           {selectedCategory !== 'ALL' && (
             <button
               type="button"
-              onClick={() => setSelectedCategory('ALL')}
+              onClick={() => {
+                setSelectedCategory('ALL');
+                soundFx.playScanBeep();
+              }}
               className="text-xs text-amber-500 hover:underline font-semibold"
             >
-              Lihat Semua Kategori
+              Reset ke Semua Rak
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar" style={{ scrollbarWidth: 'none' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              soundFx.playScanBeep();
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition flex items-center gap-1.5 border shadow-2xs ${
+              selectedCategory === 'ALL'
+                ? 'bg-amber-500 text-slate-950 border-amber-600'
+                : 'bg-surface hover:bg-surface-2 border-border text-text'
+            }`}
+          >
+            <span>🌈 Semua Rak</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedCategory === 'ALL' ? 'bg-black/20 text-slate-950' : 'bg-surface-2 text-text-muted'}`}>
+              {books.length}
+            </span>
+          </button>
+
           {categories.map((cat) => {
             const isSelected = selectedCategory === cat.id;
             const count = books.filter((b) => b.categoryId === cat.id).length;
-            const isZero = count === 0;
 
             return (
               <button
@@ -829,218 +1064,22 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                   setSelectedCategory(isSelected ? 'ALL' : cat.id);
                   soundFx.playScanBeep();
                 }}
-                className={`group relative rounded-2xl p-4 text-left transition transform hover:-translate-y-1 active:scale-95 flex flex-col justify-between overflow-hidden border ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition flex items-center gap-1.5 border shadow-2xs ${
                   isSelected
-                    ? 'border-amber-500 ring-2 ring-amber-500/30 shadow-md bg-surface'
-                    : isZero
-                    ? 'border-border opacity-70 bg-surface/50 hover:opacity-100 hover:bg-surface'
-                    : 'border-border hover:border-border/80 bg-surface shadow-2xs hover:shadow-md'
+                    ? 'bg-amber-500 text-slate-950 border-amber-600'
+                    : 'bg-surface hover:bg-surface-2 border-border text-text'
                 }`}
                 style={{
-                  backgroundColor: isSelected ? undefined : `${cat.colorHex}12`,
+                  borderLeftColor: !isSelected ? cat.colorHex : undefined,
+                  borderLeftWidth: !isSelected ? '3px' : undefined,
                 }}
               >
-                {/* Decorative 40px icon in bottom right with slight transparency */}
-                <div
-                  className="absolute -right-2 -bottom-2 opacity-15 group-hover:opacity-30 group-hover:scale-110 transition duration-300 pointer-events-none"
-                  style={{ color: cat.colorHex }}
-                >
-                  <div className="h-14 w-14 flex items-center justify-center">
-                    {getIconForCategory(cat.iconName)}
-                  </div>
-                </div>
-
-                <div className="relative z-10 flex items-center justify-between mb-3">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-xl shadow-2xs transition group-hover:rotate-6"
-                    style={{
-                      backgroundColor: `${cat.colorHex}25`,
-                      color: cat.colorHex,
-                    }}
-                  >
-                    {getIconForCategory(cat.iconName)}
-                  </div>
-                  {isZero ? (
-                    <span className="text-[10px] font-semibold text-text-muted px-2 py-0.5 rounded-full bg-surface border border-border">
-                      {t.comingSoon}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-text-muted px-2.5 py-0.5 rounded-full bg-surface border border-border">
-                      {count} Judul
-                    </span>
-                  )}
-                </div>
-
-                <div className="relative z-10">
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-wider block"
-                    style={{ color: cat.colorHex }}
-                  >
-                    {cat.shortName}
-                  </span>
-                  <h3 className="text-xs sm:text-sm font-bold font-display text-text leading-tight mt-0.5 line-clamp-1">
-                    {cat.name}
-                  </h3>
-                  <span className="text-[11px] text-text-muted mt-1 block truncate" title={cat.shelfLocation}>
-                    📍 {cat.shelfLocation}
-                  </span>
-                </div>
+                <span>{getCategoryEmoji(cat.id)}</span>
+                <span>{cat.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-black/20 text-slate-950' : 'bg-surface-2 text-text-muted'}`}>
+                  {count}
+                </span>
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* =========================================================================
-          5. NEW SECTION: PALING SERING DIPINJAM (Top 5 Ranking with Medals)
-          ========================================================================= */}
-      {topBorrowedBooks.length > 0 && (
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500">
-                <Award className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold font-display text-text">
-                  {t.mostBorrowed}
-                </h2>
-                <p className="text-xs text-text-muted">
-                  Buku cerita favorit yang paling sering dibaca adik-adik SBTH
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-            {topBorrowedBooks.map(({ book, borrowCount }, idx) => {
-              const bCount = borrowCount || borrowCountMap[book.id] || 0;
-              const medals = ['🥇', '🥈', '🥉', '4', '5'];
-
-              return (
-                <div
-                  key={`top-${book.id}`}
-                  onClick={() => {
-                    setActiveModalBook(book);
-                    soundFx.playScanBeep();
-                  }}
-                  className="group cursor-pointer rounded-2xl bg-surface border border-border hover:border-amber-500/50 p-3 transition transform hover:-translate-y-1 hover:shadow-md relative flex flex-col justify-between"
-                >
-                  {/* Ranking Medal Pill */}
-                  <div className="absolute top-2 left-2 z-10 h-7 w-7 rounded-xl bg-slate-900/90 text-white flex items-center justify-center font-bold text-xs shadow-md border border-white/20">
-                    {medals[idx] || idx + 1}
-                  </div>
-
-                  <div className="relative aspect-3/4 rounded-xl overflow-hidden bg-slate-900 shadow-xs">
-                    <SmartBookCover
-                      title={book.title}
-                      author={book.author}
-                      coverUrl={book.coverImage}
-                      categoryId={book.categoryId}
-                      aspectRatio="h-full w-full"
-                    />
-                    <div className="absolute inset-y-0 left-0 w-2.5 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" />
-                  </div>
-
-                  <div className="mt-2 text-left">
-                    <h4 className="text-xs font-semibold text-text line-clamp-2 group-hover:text-amber-500 transition leading-snug">
-                      {book.title}
-                    </h4>
-                    <div className="mt-1 flex items-center justify-between text-[11px]">
-                      <span className="text-text-muted truncate max-w-[90px]">{book.author}</span>
-                      <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
-                        {bCount}x Pinjam
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          6. NEW SECTION: PILIHAN SESUAI USIA (Tabs: Toddler / TK-A / TK-B)
-          ========================================================================= */}
-      <div className="space-y-3 pt-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-500">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold font-display text-text">
-                {t.agePicks}
-              </h2>
-              <p className="text-xs text-text-muted">
-                Rekomendasi materi & kosakata sesuai tahapan tumbuh kembang ananda
-              </p>
-            </div>
-          </div>
-
-          {/* Age Group Tab Pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-2 border border-border">
-            {[
-              { id: 'PLAYGROUP', label: 'Toddler & KB (2-3 th)' },
-              { id: 'TK_A', label: 'TK-A (4-5 th)' },
-              { id: 'TK_B', label: 'TK-B (5-6 th)' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setSelectedAgePickTab(tab.id as any);
-                  soundFx.playScanBeep();
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  selectedAgePickTab === tab.id
-                    ? 'bg-amber-500 text-slate-950 shadow-xs'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4">
-          {agePickBooks.map((book) => {
-            const items = allItems.filter((i) => i.bookId === book.id);
-            const availableCount = items.filter((i) => i.status === 'AVAILABLE').length;
-
-            return (
-              <div
-                key={`age-${book.id}`}
-                onClick={() => {
-                  setActiveModalBook(book);
-                  soundFx.playScanBeep();
-                }}
-                className="group cursor-pointer rounded-2xl bg-surface border border-border hover:border-amber-500/50 p-2.5 transition transform hover:-translate-y-1 hover:shadow-md flex flex-col justify-between"
-              >
-                <div className="relative aspect-3/4 rounded-xl overflow-hidden bg-slate-900 shadow-xs">
-                  <SmartBookCover
-                    title={book.title}
-                    author={book.author}
-                    coverUrl={book.coverImage}
-                    categoryId={book.categoryId}
-                    aspectRatio="h-full w-full"
-                  />
-                  <div className="absolute inset-y-0 left-0 w-2 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
-                </div>
-                <div className="mt-2 text-left">
-                  <h4 className="text-xs font-semibold text-text line-clamp-2 group-hover:text-amber-500 transition leading-snug">
-                    {book.title}
-                  </h4>
-                  <div className="mt-1 flex items-center justify-between text-[10px]">
-                    <span className="text-text-muted truncate max-w-[80px]">{book.author}</span>
-                    <span className="text-emerald-500 font-bold">
-                      {availableCount > 0 ? `Ada (${availableCount})` : 'Dipinjam'}
-                    </span>
-                  </div>
-                </div>
-              </div>
             );
           })}
         </div>
@@ -1106,6 +1145,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                 type="button"
                 onClick={() => {
                   setViewMode('LIST');
+                  setIsHighlightsMinimized(true);
                   soundFx.playScanBeep();
                 }}
                 className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition ${
@@ -1113,7 +1153,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                     ? 'bg-amber-500 text-slate-950 shadow-xs'
                     : 'text-text-muted hover:text-text'
                 }`}
-                title="Tampilan Mode Daftar List Lengkap"
+                title="Tampilan Mode Daftar List Ringkas (Auto-minimize sorotan atas)"
               >
                 <List className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Daftar List</span>
@@ -1125,6 +1165,27 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Small floating hint button to re-open highlights if currently minimized */}
+        {isHighlightsMinimized && (
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-2 border border-border text-xs">
+            <span className="text-text-muted text-[11px] flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              <span>Sorotan atas sedang diminimalkan agar katalog buku lebih dekat ke pencarian.</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsHighlightsMinimized(false);
+                soundFx.playScanBeep();
+              }}
+              className="text-amber-500 hover:text-amber-400 font-bold text-xs flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <span>Buka Kembali Sorotan</span>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Filter Bar: Clean Surface, Single Lucide Icons Only, No Double Emojis */}
         <div className="rounded-2xl border border-border bg-surface p-3.5 shadow-xs space-y-3">
@@ -1291,7 +1352,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                     setActiveModalBook(book);
                     soundFx.playScanBeep();
                   }}
-                  className="relative flex flex-col lg:flex-row lg:items-center justify-between p-4 bg-surface hover:bg-surface-2 border border-border/80 hover:border-amber-500/50 rounded-2xl transition group pl-5 gap-4 cursor-pointer shadow-xs"
+                  className="relative flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:py-2.5 sm:px-3.5 bg-surface hover:bg-surface-2 border border-border/80 hover:border-amber-500/50 rounded-2xl transition group pl-4 sm:pl-4.5 gap-3 cursor-pointer shadow-xs"
                 >
                   {/* Indikator Garis Warna Rak di Sisi Kiri */}
                   <div
@@ -1299,113 +1360,120 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                     style={{ backgroundColor: cat.colorHex }}
                   />
 
-                  {/* KOLOM 1: Info Utama, Halaman, Tahun, Bahasa & Level TK */}
-                  <div className="flex items-start space-x-3.5 min-w-0 flex-1">
-                    <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0 mt-0.5 border shadow-xs"
-                      style={{
-                        backgroundColor: `${cat.colorHex}20`,
-                        borderColor: `${cat.colorHex}40`,
-                      }}
-                    >
-                      {getCategoryEmoji(book.categoryId)}
+                  {/* KOLOM 1: Mini-Thumbnail Cover (48x64px) + Info Utama & Call Number SLiMS */}
+                  <div className="flex items-center space-x-3 min-w-0 flex-1">
+                    {/* Mini-Thumbnail Cover (Rasio 3:4, Rounded, 48x64px) */}
+                    <div className="w-12 h-16 shrink-0 rounded-lg overflow-hidden border border-border shadow-2xs bg-slate-900 relative group/thumb">
+                      <SmartBookCover
+                        title={book.title}
+                        author={book.author}
+                        coverUrl={book.coverImage}
+                        categoryId={book.categoryId}
+                        aspectRatio="h-full w-full"
+                      />
+                      <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-r from-black/30 to-transparent pointer-events-none" />
                     </div>
-                    <div className="min-w-0 space-y-1">
-                      {/* Baris Judul & Badge Usia */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-bold text-text group-hover:text-amber-500 transition leading-snug">
+
+                    <div className="min-w-0 space-y-0.5 flex-1">
+                      {/* Baris Judul & Call Number DDC SLiMS */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h4 className="text-xs sm:text-sm font-bold text-text group-hover:text-amber-500 transition leading-snug line-clamp-1">
                           {book.title}
                         </h4>
-                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md">
+                        <span className="font-mono text-[9px] px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-500 font-bold border border-amber-500/30">
+                          {book.callNumber || generateSlimsCallNumber(book.title, book.author, book.categoryId)}
+                        </span>
+                        <span className="px-1.5 py-0.2 text-[9px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md">
                           {getAgeBadgeLabel(book.ageGroup)}
                         </span>
                         {isNew && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-slate-950 rounded-md">
-                            BARU MASUK
+                          <span className="px-1.5 py-0.2 text-[9px] font-bold bg-amber-500 text-slate-950 rounded-md">
+                            BARU
                           </span>
                         )}
                       </div>
 
-                      {/* Baris Pengarang, Penerbit & Tahun */}
-                      <p className="text-xs text-text-muted">
-                        <span className="text-text-muted/70">Oleh:</span> {book.author} •{' '}
-                        <span className="text-text-muted/70">Penerbit:</span> {book.publisher} ({book.publicationYear})
+                      {/* Baris Pengarang & Penerbit */}
+                      <p className="text-[11px] text-text-muted truncate">
+                        <span className="text-text-muted/70">Oleh:</span> {book.author} • {book.publisher} ({book.publicationYear})
                       </p>
 
-                      {/* Baris Spesifikasi Fisik: Halaman, Bahasa, Format */}
-                      <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-text-muted pt-0.5 font-medium">
-                        <span>📄 {book.pageCount ? `${book.pageCount} Halaman` : '32 Halaman'}</span>
+                      {/* Baris Lokasi Rak & Barcode Fisik */}
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-muted font-medium">
+                        <span className="inline-flex items-center gap-1 text-emerald-500 font-semibold">
+                          📍 {cat.shelfLocation || 'Rak Utama'}
+                        </span>
                         <span>•</span>
-                        <span>🌐 {getLangLabel(book.bookLanguage)}</span>
+                        <span className="font-mono text-text-muted">🏷️ {firstBarcode}</span>
                         <span>•</span>
-                        <span>📘 {book.physicalFormat || 'Cerita Bergambar'}</span>
+                        <span>{book.pageCount ? `${book.pageCount} Halaman` : '32 Hal'}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* KOLOM 2, 3 & 4: Lokasi Rak, Total Dipinjam, & Status Sirkulasi */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between lg:justify-end gap-3 sm:gap-4 shrink-0 border-t lg:border-t-0 border-border pt-3 lg:pt-0">
-                    {/* Lokasi Rak & Kode Barcode */}
-                    <div className="text-left lg:text-right min-w-[130px]">
-                      <div className="text-xs font-semibold text-text bg-surface-2 px-2.5 py-1 rounded-lg border border-border inline-flex items-center gap-1.5 shadow-2xs">
-                        <span>📍</span>
-                        <span>{cat.shelfLocation || 'Rak Utama'}</span>
-                      </div>
-                      <div className="text-[10px] font-mono text-text-muted mt-1">
-                        🏷️ {firstBarcode} ({totalCopies} Eks)
-                      </div>
+                  {/* KOLOM 2: Total Dipinjam, Status Ketersediaan & Quick Actions */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 border-t sm:border-t-0 border-border pt-2 sm:pt-0">
+                    {/* Statistik Dipinjam */}
+                    <div className="text-center px-2 py-1 rounded-lg bg-surface-2 border border-border min-w-[55px]">
+                      <div className="text-xs font-bold text-amber-500">{loanCount}x</div>
+                      <div className="text-[9px] text-text-muted">Dipinjam</div>
                     </div>
 
-                    {/* Statistik Total Peminjaman */}
-                    <div className="text-center px-3 py-1.5 rounded-xl bg-surface-2 border border-border min-w-[70px]">
-                      <div className="text-xs font-bold text-amber-500">🔥 {loanCount}x</div>
-                      <div className="text-[10px] text-text-muted">Dipinjam</div>
-                    </div>
-
-                    {/* Status Ketersediaan & Info Siapa yang Sedang Meminjam */}
-                    <div className="text-right min-w-[145px]">
+                    {/* Status Ketersediaan */}
+                    <div className="text-right min-w-[110px]">
                       {availableCount > 0 ? (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          ● Tersedia ({availableCount} / {totalCopies})
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          ● Ada ({availableCount}/{totalCopies})
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                          ● Dipinjam ({availableCount} / {totalCopies})
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                          ● Dipinjam ({availableCount}/{totalCopies})
                         </span>
                       )}
-                      {borrowerInfo ? (
+                      {borrowerInfo && (
                         <div
-                          className="text-[10px] text-amber-400/90 mt-1 truncate max-w-[180px]"
-                          title={`Sedang dipinjam ${borrowerInfo.name} (${borrowerInfo.group})`}
+                          className="text-[9px] text-amber-400/90 mt-0.5 truncate max-w-[130px]"
+                          title={`Sedang dipinjam ${borrowerInfo.name}`}
                         >
-                          ⏳ 1 dibawa: {borrowerInfo.name} ({borrowerInfo.group})
-                        </div>
-                      ) : damagedCount > 0 ? (
-                        <div className="text-[10px] text-amber-400 mt-1">
-                          🩹 {damagedCount} Eks Perbaikan
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-emerald-400/80 mt-1">
-                          ✨ Kondisi Baik
+                          ⏳ {borrowerInfo.name}
                         </div>
                       )}
                     </div>
 
-                    {/* Quick Loan Button */}
-                    {onSelectBookForLoan && availableCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectBookForLoan(book);
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95 shrink-0"
-                        title="Buka Sirkulasi Peminjaman untuk buku ini"
-                      >
-                        <Zap className="h-3.5 w-3.5" />
-                        <span>Pinjam</span>
-                      </button>
-                    )}
+                    {/* Action Buttons: Pinjam (if available) or Reservasi (if borrowed) */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {onSelectBookForLoan && availableCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectBookForLoan(book);
+                          }}
+                          className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-xs transition active:scale-95"
+                          title="Buka Sirkulasi Peminjaman untuk buku ini"
+                        >
+                          <Zap className="h-3 w-3" />
+                          <span>Pinjam</span>
+                        </button>
+                      )}
+
+                      {availableCount === 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReservationBook(book);
+                            setIsReservationModalOpen(true);
+                            soundFx.playScanBeep();
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-1 shadow-2xs transition active:scale-95"
+                          title="Pesan/Booking buku ini agar tidak diambil orang lain saat kembali"
+                        >
+                          <BookmarkPlus className="h-3 w-3" />
+                          <span>Reservasi</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1672,12 +1740,209 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
               );
             })()}
 
-            {/* Close button */}
-            <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+            {/* Actions in Book Detail: Reservasi if not available, Loan if available */}
+            <div className="pt-2 flex items-center justify-between gap-2 border-t border-border">
+              <div>
+                {(() => {
+                  const items = allItems.filter((i) => i.bookId === activeModalBook.id);
+                  const avail = items.filter((i) => i.status === 'AVAILABLE').length;
+
+                  if (avail === 0) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReservationBook(activeModalBook);
+                          setIsReservationModalOpen(true);
+                          soundFx.playScanBeep();
+                        }}
+                        className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                      >
+                        <BookmarkPlus className="h-4 w-4" />
+                        <span>Reservasi Buku Ini (Booking)</span>
+                      </button>
+                    );
+                  }
+
+                  if (onSelectBookForLoan) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectBookForLoan(activeModalBook);
+                          setActiveModalBook(null);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                      >
+                        <Zap className="h-4 w-4" />
+                        <span>Pinjam Sekarang</span>
+                      </button>
+                    );
+                  }
+
+                  return null;
+                })()}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setActiveModalBook(null)}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition"
+                className="px-5 py-2.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-text font-bold text-xs transition"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: RESERVASI BUKU (BOOKING UNTUK SISWA)
+          ========================================================================= */}
+      {isReservationModalOpen && reservationBook && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-2xl border border-border p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <BookmarkPlus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-text">Reservasi Buku (Booking)</h3>
+                  <p className="text-[11px] text-text-muted">Simpan buku saat dikembalikan agar tidak diambil orang</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReservationModalOpen(false);
+                  setReservationBook(null);
+                }}
+                className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-2"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-surface-2 border border-border">
+              <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 border border-border bg-slate-900">
+                <SmartBookCover
+                  title={reservationBook.title}
+                  author={reservationBook.author}
+                  coverUrl={reservationBook.coverImage}
+                  categoryId={reservationBook.categoryId}
+                  aspectRatio="h-full w-full"
+                />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-text truncate">{reservationBook.title}</h4>
+                <p className="text-[11px] text-text-muted">{reservationBook.author}</p>
+                <span className="font-mono text-[9px] text-amber-500 font-bold block mt-0.5">
+                  🏷️ {reservationBook.callNumber || generateSlimsCallNumber(reservationBook.title, reservationBook.author, reservationBook.categoryId)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-text block">
+                Pilih Siswa / Anggota Pemesan:
+              </label>
+              <select
+                value={selectedResMemberId}
+                onChange={(e) => setSelectedResMemberId(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text font-medium outline-hidden focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">-- Pilih Nama Siswa / Guru --</option>
+                {allMembers
+                  .filter((m) => m.status !== 'GRADUATED' && m.status !== 'INACTIVE')
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.type === 'TEACHER' ? 'Guru' : m.classGroup})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 space-y-1">
+              <p className="font-bold">Ketentuan Reservasi:</p>
+              <p>• Buku akan diprioritaskan untukmu begitu siswa peminjam mengembalikan fisik buku ke perpustakaan.</p>
+              <p>• Masa simpan di rak reservasi adalah <strong>1x24 jam</strong>. Jika tidak diambil, buku akan kembali tersedia untuk umum.</p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReservationModalOpen(false);
+                  setReservationBook(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-surface-2 text-text font-semibold text-xs hover:bg-surface border border-border"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedResMemberId) {
+                    alert('Mohon pilih nama siswa atau guru yang melakukan reservasi!');
+                    return;
+                  }
+                  const member = allMembers.find((m) => m.id === selectedResMemberId);
+                  if (!member) return;
+
+                  const res = libraryStore.createReservation(reservationBook.id, member.id, member.name);
+                  soundFx.playSuccessChime();
+                  alert(`✅ Reservasi Berhasil!\nBuku "${reservationBook.title}" telah dipesan atas nama ${member.name}. Anda akan diprioritaskan saat buku dikembalikan!`);
+                  setIsReservationModalOpen(false);
+                  setReservationBook(null);
+                  setSelectedResMemberId('');
+                }}
+                className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs shadow-md transition"
+              >
+                Konfirmasi Reservasi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: CMS ARTIKEL BERITA & PENGUMUMAN PERPUSTAKAAN
+          ========================================================================= */}
+      {activeNewsArticle && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-surface shadow-2xl border border-border p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+              <div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400">
+                  {activeNewsArticle.category}
+                </span>
+                <h3 className="text-base sm:text-lg font-bold font-display text-text mt-1">
+                  {activeNewsArticle.title}
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Dipublikasikan: {activeNewsArticle.publishedDate} • Oleh: {activeNewsArticle.author}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveNewsArticle(null)}
+                className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-2"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-text-muted leading-relaxed space-y-3 whitespace-pre-line max-h-96 overflow-y-auto pr-1">
+              <p className="font-semibold text-text">{activeNewsArticle.summary}</p>
+              <p>{activeNewsArticle.content}</p>
+            </div>
+
+            <div className="pt-2 flex justify-end border-t border-border">
+              <button
+                type="button"
+                onClick={() => setActiveNewsArticle(null)}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition"
               >
                 Tutup
               </button>

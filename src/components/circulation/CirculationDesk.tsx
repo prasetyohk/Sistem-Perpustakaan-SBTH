@@ -20,6 +20,7 @@ import {
   Check,
   History,
   Eye,
+  X,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Member, BookItem, Book, Loan } from '@/types';
@@ -41,7 +42,7 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
   scannedCode,
   onClearScannedCode,
 }) => {
-  const [activeTab, setActiveTab] = useState<'BORROW' | 'RETURN' | 'OVERDUE' | 'INSPECT'>('BORROW');
+  const [activeTab, setActiveTab] = useState<'BORROW' | 'RETURN' | 'RENEW' | 'OVERDUE' | 'INSPECT'>('BORROW');
   const [inspectBarcode, setInspectBarcode] = useState<string>('SBTH-B-00101');
 
   // Borrow Flow State
@@ -64,6 +65,23 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
   const [todayStr, setTodayStr] = useState<string>('2026-10-15');
   const [selectedOverdueClass, setSelectedOverdueClass] = useState<string>('ALL');
   const [copiedClass, setCopiedClass] = useState<string | null>(null);
+
+  // 🔄 Perpanjangan Pinjaman (Renewal) State
+  const [renewSearch, setRenewSearch] = useState<string>('');
+  const [renewSelectedMember, setRenewSelectedMember] = useState<Member | null>(null);
+  const [renewExtensionDays, setRenewExtensionDays] = useState<number>(7);
+  const [lastRenewedResult, setLastRenewedResult] = useState<{
+    loanId: string;
+    bookTitle: string;
+    newDueDate: string;
+    renewalCount: number;
+  } | null>(null);
+
+  // 🔔 Reservation Hold Alert on Book Return
+  const [reservedHoldNotice, setReservedHoldNotice] = useState<{
+    reservation: any;
+    bookTitle: string;
+  } | null>(null);
 
   useEffect(() => {
     setTodayStr(new Date().toISOString().split('T')[0]);
@@ -215,8 +233,43 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
       member: result.member,
     });
 
+    // Check if there is an active reservation for this book
+    const resCheck = libraryStore.checkBookReservationsOnReturn(item.bookId);
+    if (resCheck) {
+      setReservedHoldNotice({
+        reservation: resCheck,
+        bookTitle: resCheck.bookTitle || book?.title || 'Buku SBTH',
+      });
+      alert(`🔔 PERHATIAN: BUKU TELAH DI-RESERVASI!\nBuku "${book?.title}" sedang dibooking oleh ${resCheck.memberName} (${resCheck.memberClass}).\nMohon simpan di rak reservasi khusus (Masa tunggu 24 jam).`);
+    }
+
     setReturnBarcode('');
     soundFx.playSuccessChime();
+  };
+
+  // Process loan extension / renewal
+  const handleRenewLoan = (loanId: string, bookTitle: string) => {
+    const result = libraryStore.renewLoan(loanId, renewExtensionDays, 'Pustakawan SBTH');
+    if (!result.success) {
+      alert(`❌ Perpanjangan Gagal: ${result.message}`);
+      soundFx.playErrorBeep();
+      return;
+    }
+
+    setLastRenewedResult({
+      loanId,
+      bookTitle,
+      newDueDate: result.newDueDate || '',
+      renewalCount: 1,
+    });
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 },
+    });
+    soundFx.playSuccessChime();
+    alert(`🎉 Berhasil diperpanjang!\nBuku "${bookTitle}" berhasil diperpanjang +${renewExtensionDays} hari hingga ${result.newDueDate || 'tanggal yang ditentukan'}.`);
   };
 
   // Overdue loans calculation
@@ -305,6 +358,19 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
         >
           <RotateCcw className="h-4 w-4" />
           <span>Pengembalian Kilat</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('RENEW')}
+          className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition ${
+            activeTab === 'RENEW'
+              ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+              : 'text-text-muted hover:text-text'
+          }`}
+        >
+          <Clock className="h-4 w-4" />
+          <span>Perpanjangan Pinjam</span>
         </button>
 
         <button
@@ -599,11 +665,12 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
                     <select
                       value={loanDurationDays}
                       onChange={(e) => setLoanDurationDays(parseInt(e.target.value, 10))}
-                      className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-text outline-hidden"
+                      className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold text-text outline-hidden cursor-pointer"
                     >
-                      <option value={7}>1 Minggu (7 Hari)</option>
-                      <option value={14}>2 Minggu (14 Hari)</option>
-                      <option value={3}>3 Hari</option>
+                      <option value={3}>⚡ 3 Hari (Pinjaman Kilat)</option>
+                      <option value={7}>📅 1 Minggu (7 Hari - Siswa Standar)</option>
+                      <option value={14}>📚 2 Minggu (14 Hari - Guru / Tugas)</option>
+                      <option value={30}>🏫 1 Bulan (30 Hari - Pojok Baca Kelas)</option>
                     </select>
                   </div>
 
@@ -691,6 +758,37 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
             </div>
           </div>
 
+          {/* 🔔 Alert Banner: Reservation Hold Alert */}
+          {reservedHoldNotice && (
+            <div className="rounded-2xl border-2 border-amber-500 bg-amber-500/15 p-5 shadow-md space-y-3 animate-in zoom-in-95">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5 text-amber-500 font-bold text-sm">
+                  <span className="text-xl">🔔</span>
+                  <span>PERHATIAN: BUKU TELAH DI-RESERVASI (BOOKING)!</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReservedHoldNotice(null)}
+                  className="p-1 text-text-muted hover:text-text rounded-lg hover:bg-surface-2"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-3.5 rounded-xl bg-surface border border-amber-500/40 space-y-1 text-xs">
+                <p className="text-text font-bold">
+                  Buku &ldquo;{reservedHoldNotice.bookTitle}&rdquo; telah dipesan oleh:
+                </p>
+                <div className="flex items-center gap-2 text-amber-400 font-bold">
+                  <span>👤 {reservedHoldNotice.reservation.memberName}</span>
+                  <span>({reservedHoldNotice.reservation.memberClass || 'Siswa'})</span>
+                </div>
+                <p className="text-[11px] text-text-muted pt-1">
+                  📦 <strong>Instruksi Pustakawan:</strong> Jangan langsung letakkan di rak umum! Simpan di <em>Rak Reservasi Khusus</em> selama <strong>1x24 Jam</strong> (hingga {reservedHoldNotice.reservation.expiryDate}).
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Success return card */}
           {lastReturnedInfo && (
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 shadow-xs space-y-3 animate-in fade-in">
@@ -717,6 +815,215 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: PERPANJANGAN PINJAMAN (RENEWAL WORKFLOW) */}
+      {activeTab === 'RENEW' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT COLUMN: Pilih Siswa / Guru yang ingin perpanjang */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="rounded-2xl bg-surface border border-border p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-text flex items-center gap-2">
+                    <Users className="h-4 w-4 text-amber-500" />
+                    <span>Pilih Peminjam</span>
+                  </h3>
+                  <span className="text-[11px] text-text-muted">Cari nama / kelas</span>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-text-muted" />
+                  <input
+                    type="text"
+                    value={renewSearch}
+                    onChange={(e) => setRenewSearch(e.target.value)}
+                    placeholder="Ketik nama siswa atau kelas..."
+                    className="w-full rounded-xl border border-border bg-surface-2 pl-9 pr-3 py-1.5 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+
+                {/* Member Search Grid / Selection */}
+                {renewSelectedMember ? (
+                  <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4 space-y-3 relative">
+                    <button
+                      type="button"
+                      onClick={() => setRenewSelectedMember(null)}
+                      className="absolute top-3 right-3 text-xs text-text-muted hover:text-amber-500 font-semibold"
+                    >
+                      Ganti Anggota
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={renewSelectedMember.name} src={renewSelectedMember.photoUrl} size="md" shape="rounded" />
+                      <div>
+                        <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                          {renewSelectedMember.memberCode}
+                        </span>
+                        <h4 className="text-sm font-bold text-text mt-0.5">{renewSelectedMember.name}</h4>
+                        <p className="text-xs text-text-muted">
+                          {renewSelectedMember.type === 'TEACHER' ? 'Guru' : renewSelectedMember.classGroup}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                    {members
+                      .filter((m) => {
+                        if (m.status === 'GRADUATED') return false;
+                        if (!renewSearch.trim()) return true;
+                        const q = renewSearch.toLowerCase();
+                        return m.name.toLowerCase().includes(q) || m.classGroup.toLowerCase().includes(q) || m.memberCode.toLowerCase().includes(q);
+                      })
+                      .map((m) => {
+                        const hasActive = loans.some((l) => l.memberId === m.id && (l.status === 'ACTIVE' || l.status === 'OVERDUE'));
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setRenewSelectedMember(m);
+                              soundFx.playScanBeep();
+                            }}
+                            className={`p-2 rounded-xl border text-left flex items-center gap-2 transition ${
+                              hasActive
+                                ? 'border-amber-500/40 bg-surface-2 hover:bg-surface'
+                                : 'border-border bg-surface-2/60 opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <Avatar name={m.name} src={m.photoUrl} size="sm" shape="circle" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-text truncate">{m.name}</p>
+                              <span className={`text-[10px] font-bold ${hasActive ? 'text-amber-500' : 'text-text-muted'}`}>
+                                {hasActive ? 'Ada Pinjaman' : '0 Pinjaman'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Active loans and Renewal controls */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="rounded-2xl bg-surface border border-border p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-text flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-500" />
+                      <span>Daftar Pinjaman Aktif</span>
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Pilih buku yang ingin diperpanjang masa pinjamnya
+                    </p>
+                  </div>
+
+                  {/* Extension Duration selector */}
+                  <div className="flex items-center gap-1.5 bg-surface-2 p-1 rounded-xl border border-border">
+                    <span className="text-[11px] font-medium text-text-muted px-2">Tambah Durasi:</span>
+                    {[
+                      { days: 3, label: '+3 Hari' },
+                      { days: 7, label: '+7 Hari (1 Mgg)' },
+                      { days: 14, label: '+14 Hari (2 Mgg)' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.days}
+                        type="button"
+                        onClick={() => setRenewExtensionDays(opt.days)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          renewExtensionDays === opt.days
+                            ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                            : 'text-text-muted hover:text-text'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Loans listing */}
+                {(() => {
+                  if (!renewSelectedMember) {
+                    return (
+                      <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center text-text-muted space-y-2 bg-surface-2/30">
+                        <Users className="h-8 w-8 mx-auto text-text-muted opacity-40" />
+                        <p className="text-xs font-semibold text-text">Pilih siswa atau guru di sebelah kiri</p>
+                        <p className="text-[11px] text-text-muted">Riwayat buku yang sedang dipinjam akan otomatis muncul di sini</p>
+                      </div>
+                    );
+                  }
+
+                  const memberActiveLoans = loans.filter(
+                    (l) => l.memberId === renewSelectedMember.id && (l.status === 'ACTIVE' || l.status === 'OVERDUE')
+                  );
+
+                  if (memberActiveLoans.length === 0) {
+                    return (
+                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center text-emerald-400 space-y-1">
+                        <CheckCircle className="h-8 w-8 mx-auto" />
+                        <p className="text-xs font-bold text-text">Tidak Ada Buku yang Sedang Dipinjam</p>
+                        <p className="text-[11px] text-text-muted">Seluruh pinjaman siswa ini sudah dikembalikan atau belum ada peminjaman baru.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {memberActiveLoans.map((loan) => (
+                        <div key={loan.id} className="p-4 rounded-2xl border border-border bg-surface-2 space-y-3">
+                          <div className="flex items-center justify-between text-xs text-text-muted pb-2 border-b border-border">
+                            <span>No. Peminjaman: <strong className="font-mono text-text">{loan.id}</strong></span>
+                            <span>Tgl Pinjam: <strong className="text-text">{loan.loanDate}</strong></span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {loan.items.map((li) => {
+                              const isOverdue = loan.dueDate < todayStr;
+                              const renewCount = loan.renewalCount || 0;
+                              const maxRenew = renewSelectedMember.type === 'TEACHER' ? 2 : 1;
+                              const canRenew = renewCount < maxRenew;
+
+                              return (
+                                <div key={li.bookItemId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-surface border border-border">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-[10px] font-bold text-amber-500 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                                        {li.itemBarcode}
+                                      </span>
+                                      <h4 className="text-xs font-bold text-text truncate">{li.bookTitle}</h4>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-[11px] text-text-muted mt-1">
+                                      <span>Jatuh Tempo: <strong className={isOverdue ? 'text-rose-500' : 'text-emerald-500'}>{loan.dueDate}</strong></span>
+                                      <span>•</span>
+                                      <span>Diperpanjang: <strong>{renewCount}/{maxRenew}x</strong></span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRenewLoan(loan.id, li.bookTitle)}
+                                    disabled={!canRenew}
+                                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition active:scale-95 shrink-0"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    <span>{canRenew ? `Perpanjang (+${renewExtensionDays} Hari)` : 'Batas Habis'}</span>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

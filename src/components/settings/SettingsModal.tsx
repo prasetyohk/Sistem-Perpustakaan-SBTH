@@ -22,6 +22,16 @@ import {
   Globe,
   Save,
   Wallet,
+  Sliders,
+  Barcode,
+  Newspaper,
+  BookOpen,
+  Calendar,
+  Eye,
+  EyeOff,
+  BookmarkCheck,
+  HelpCircle,
+  Megaphone,
 } from 'lucide-react';
 import {
   SchoolProfile,
@@ -31,6 +41,10 @@ import {
   ReminderDay,
   ReminderChannel,
   Category,
+  LoanRules,
+  MemberTypeRule,
+  SlimsPatternConfig,
+  LibraryNewsArticle,
 } from '@/types';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
@@ -47,7 +61,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onProfileUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'SCHOOL' | 'LIBRARIANS' | 'REMINDERS' | 'CATEGORIES'>('SCHOOL');
+  const [activeTab, setActiveTab] = useState<
+    'SCHOOL' | 'LOAN_RULES' | 'SLIMS_CONFIG' | 'CMS_NEWS' | 'LIBRARIANS' | 'CATEGORIES' | 'REMINDERS'
+  >('SCHOOL');
   const [toastMessage, setToastMessage] = useState<string>('');
 
   // School Profile state
@@ -76,6 +92,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Reminders state
   const [schedule, setSchedule] = useState<ReminderSchedule>(libraryStore.getReminderSchedule());
 
+  // Loan Rules state
+  const [loanRules, setLoanRules] = useState<LoanRules>(libraryStore.getLoanRules());
+
+  // SLiMS Pattern Config state
+  const [slimsPattern, setSlimsPattern] = useState<SlimsPatternConfig>(libraryStore.getSlimsPattern());
+
+  // CMS News state
+  const [newsList, setNewsList] = useState<LibraryNewsArticle[]>(libraryStore.getLibraryNews());
+  const [isAddNewsOpen, setIsAddNewsOpen] = useState<boolean>(false);
+  const [newsTitle, setNewsTitle] = useState<string>('');
+  const [newsSummary, setNewsSummary] = useState<string>('');
+  const [newsContent, setNewsContent] = useState<string>('');
+  const [newsCategory, setNewsCategory] = useState<LibraryNewsArticle['category']>('ANNOUNCEMENT');
+  const [newsBadge, setNewsBadge] = useState<string>('PENGUMUMAN');
+  const [newsPinned, setNewsPinned] = useState<boolean>(false);
+
   useEffect(() => {
     if (isOpen) {
       const p = libraryStore.getSchoolProfile();
@@ -84,6 +116,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setLibrarians(libraryStore.getLibrarians());
       setSchedule(libraryStore.getReminderSchedule());
       setCategories(libraryStore.getCategories());
+      setLoanRules(libraryStore.getLoanRules());
+      setSlimsPattern(libraryStore.getSlimsPattern());
+      setNewsList(libraryStore.getLibraryNews());
       setToastMessage('');
     }
   }, [isOpen]);
@@ -230,6 +265,108 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     soundFx.playSuccessChime();
   };
 
+  // --- LOAN RULES HANDLERS ---
+  const handleSaveLoanRules = (e: React.FormEvent) => {
+    e.preventDefault();
+    libraryStore.saveLoanRules(loanRules);
+    soundFx.playSuccessChime();
+    showToast('✓ Aturan peminjaman, durasi & kuota berhasil disimpan!');
+  };
+
+  const handleUpdateMemberRule = (memberType: string, field: keyof MemberTypeRule, value: number) => {
+    const updated = (loanRules.memberTypeRules || []).map((r) => {
+      if (r.memberType === memberType) {
+        return { ...r, [field]: value };
+      }
+      return r;
+    });
+    setLoanRules({ ...loanRules, memberTypeRules: updated });
+  };
+
+  // --- SLIMS CONFIG HANDLERS ---
+  const handleSaveSlimsPattern = (e: React.FormEvent) => {
+    e.preventDefault();
+    libraryStore.saveSlimsPattern(slimsPattern);
+    soundFx.playSuccessChime();
+    showToast('✓ Konfigurasi pola nomor eksemplar SLiMS berhasil disimpan!');
+  };
+
+  const handleApplyPreset = (mode: SlimsPatternConfig['patternMode']) => {
+    let prefix = slimsPattern.prefix;
+    let serialLength = slimsPattern.serialLength || 5;
+    let suffix = slimsPattern.suffix || '';
+    if (mode === 'SBTH') {
+      prefix = 'SBTH-B-';
+      serialLength = 5;
+      suffix = '';
+    } else if (mode === 'SLIMS_STANDARD') {
+      prefix = 'B';
+      serialLength = 5;
+      suffix = '';
+    } else if (mode === 'CATEGORY_BASED') {
+      prefix = 'DNG-';
+      serialLength = 5;
+      suffix = '';
+    }
+    setSlimsPattern({
+      ...slimsPattern,
+      patternMode: mode,
+      prefix,
+      serialLength,
+      suffix,
+    });
+    soundFx.playScanBeep();
+  };
+
+  // --- CMS NEWS HANDLERS ---
+  const handleAddNews = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsTitle.trim() || !newsContent.trim()) {
+      alert('Judul dan isi berita wajib diisi.');
+      return;
+    }
+    libraryStore.addLibraryNews({
+      title: newsTitle.trim(),
+      summary: newsSummary.trim() || newsContent.trim().slice(0, 100),
+      content: newsContent.trim(),
+      category: newsCategory,
+      badgeText: newsBadge.trim() || 'PENGUMUMAN',
+      publishedDate: new Date().toISOString().split('T')[0],
+      isPinned: newsPinned,
+      isActive: true,
+      author: profile.librarianName || 'Pustakawan SBTH',
+    });
+    setNewsList(libraryStore.getLibraryNews());
+    setIsAddNewsOpen(false);
+    setNewsTitle('');
+    setNewsSummary('');
+    setNewsContent('');
+    setNewsBadge('PENGUMUMAN');
+    setNewsPinned(false);
+    soundFx.playSuccessChime();
+    showToast('✓ Berita / Warta perpustakaan berhasil diterbitkan!');
+  };
+
+  const handleToggleNews = (id: string) => {
+    const target = newsList.find((n) => n.id === id);
+    if (target) {
+      const updated = { ...target, isActive: !target.isActive };
+      libraryStore.updateLibraryNews(updated);
+      setNewsList(libraryStore.getLibraryNews());
+      soundFx.playScanBeep();
+      showToast(updated.isActive ? 'Warta diaktifkan (muncul di OPAC).' : 'Warta dinonaktifkan.');
+    }
+  };
+
+  const handleDeleteNews = (id: string, title: string) => {
+    if (confirm(`Hapus warta/berita "${title}"?`)) {
+      libraryStore.deleteLibraryNews(id);
+      setNewsList(libraryStore.getLibraryNews());
+      soundFx.playScanBeep();
+      showToast('Warta telah dihapus.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in">
       <div className="relative w-full max-w-4xl bg-surface border-l border-border h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
@@ -250,7 +387,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-text-muted mt-0.5">
-                Profil sekolah, akun pustakawan, pengingat rutin, dan master kategori buku
+                Profil sekolah, aturan pinjam, standar SLiMS, CMS warta, akun pustakawan, dan kategori rak
               </p>
             </div>
           </div>
@@ -278,9 +415,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border bg-surface-2/40 p-3 space-y-1 shrink-0 overflow-x-auto md:overflow-visible flex md:flex-col">
             {[
               { id: 'SCHOOL', label: 'Profil Sekolah', icon: School, desc: 'Nama, Logo & Kontak' },
+              { id: 'LOAN_RULES', label: 'Aturan Pinjam', icon: Sliders, desc: 'Durasi, Kuota & Reservasi' },
+              { id: 'SLIMS_CONFIG', label: 'Pola SLiMS & Barcode', icon: Barcode, desc: 'DDC, Call No & Barcode' },
+              { id: 'CMS_NEWS', label: 'Warta Perpus (CMS)', icon: Newspaper, desc: 'Berita & Info OPAC' },
               { id: 'LIBRARIANS', label: 'Pustakawan', icon: Users, desc: 'Akun & PIN Akses' },
-              { id: 'REMINDERS', label: 'Pengingat Rutin', icon: Bell, desc: 'Jadwal WA & Telegram' },
               { id: 'CATEGORIES', label: 'Kategori Rak', icon: Tags, desc: 'Rak & Topik Buku' },
+              { id: 'REMINDERS', label: 'Pengingat Rutin', icon: Bell, desc: 'Jadwal WA & Telegram' },
             ].map((nav) => {
               const Icon = nav.icon;
               const isActive = activeTab === nav.id;
@@ -734,6 +874,488 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* TAB: ATURAN PEMINJAMAN FLEKSIBEL (LOAN RULES) */}
+            {activeTab === 'LOAN_RULES' && (
+              <form onSubmit={handleSaveLoanRules} className="space-y-6 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold font-display text-text flex items-center gap-2">
+                      <Sliders className="h-4 w-4 text-amber-500" />
+                      <span>Aturan Peminjaman Fleksibel (Loan Rules)</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Atur kuota buku, durasi pinjam per tipe anggota, dan kebijakan batas waktu reservasi
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Simpan Aturan</span>
+                  </button>
+                </div>
+
+                {/* Member Type Rules Grid */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-text block">
+                    Batas Pinjam & Perpanjangan Menurut Tipe Anggota:
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                    {(loanRules.memberTypeRules || []).map((rule) => (
+                      <div
+                        key={rule.memberType}
+                        className="p-4 rounded-2xl bg-surface border border-border shadow-2xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between border-b border-border pb-2.5">
+                          <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                            {rule.memberType === 'STUDENT' ? '👶' : rule.memberType === 'TEACHER' ? '👩‍🏫' : '📖'} {rule.label}
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-muted">
+                            {rule.memberType}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <label className="text-[11px] text-text-muted block mb-1">Maks. Buku Dipinjam:</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={rule.maxBooks}
+                                onChange={(e) =>
+                                  handleUpdateMemberRule(rule.memberType, 'maxBooks', parseInt(e.target.value) || 1)
+                                }
+                                className="w-full h-9 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text font-bold text-center"
+                              />
+                              <span className="text-[11px] text-text-muted shrink-0">Buku</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-text-muted block mb-1">Durasi Pinjam Standar:</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max="90"
+                                value={rule.loanDurationDays}
+                                onChange={(e) =>
+                                  handleUpdateMemberRule(rule.memberType, 'loanDurationDays', parseInt(e.target.value) || 7)
+                                }
+                                className="w-full h-9 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text font-bold text-center"
+                              />
+                              <span className="text-[11px] text-text-muted shrink-0">Hari</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-text-muted block mb-1">Batas Maks. Perpanjangan:</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={rule.maxRenewals}
+                                onChange={(e) =>
+                                  handleUpdateMemberRule(rule.memberType, 'maxRenewals', parseInt(e.target.value) || 0)
+                                }
+                                className="w-full h-9 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text font-bold text-center"
+                              />
+                              <span className="text-[11px] text-text-muted shrink-0">Kali</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Durasi Pilihan Cepat di Kasir */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-text flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-amber-500" />
+                        <span>Pilihan Durasi Cepat di Kasir Sirkulasi</span>
+                      </h4>
+                      <p className="text-[11px] text-text-muted mt-0.5">
+                        Pustakawan bisa memilih opsi durasi ini secara fleksibel saat checkout peminjaman baru
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[3, 7, 14, 21, 30].map((days) => {
+                      const isSelected = (loanRules.allowedDurations || [3, 7, 14, 30]).includes(days);
+                      return (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => {
+                            const current = loanRules.allowedDurations || [3, 7, 14, 30];
+                            let nextList = isSelected
+                              ? current.filter((d) => d !== days)
+                              : [...current, days].sort((a, b) => a - b);
+                            if (nextList.length === 0) nextList = [7];
+                            setLoanRules({ ...loanRules, allowedDurations: nextList });
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold shadow-2xs'
+                              : 'bg-surface text-text-muted border-border hover:text-text'
+                          }`}
+                        >
+                          {days === 3 ? '⚡ 3 Hari (Kilat)' : days === 7 ? '🗓️ 7 Hari (1 Minggu)' : days === 14 ? '📅 14 Hari (2 Minggu)' : days === 21 ? '📅 21 Hari' : '📚 30 Hari (1 Bulan)'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Kebijakan Reservasi Buku */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-xl bg-purple-500/15 text-purple-500 border border-purple-500/30 flex items-center justify-center shrink-0">
+                      <BookmarkCheck className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-xs font-bold text-text">
+                        Batas Waktu Pengambilan Buku Reservasi (Hold Expiry)
+                      </h4>
+                      <p className="text-[11px] text-text-muted mt-0.5">
+                        Ketika buku yang di-booking telah dikembalikan ke perpus, sistem mengunci buku tersebut agar tidak dipinjam siswa lain selama:
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">
+                        Masa Hold Reservasi:
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max="72"
+                          value={loanRules.reservationExpiryHours || 24}
+                          onChange={(e) =>
+                            setLoanRules({
+                              ...loanRules,
+                              reservationExpiryHours: parseInt(e.target.value) || 24,
+                            })
+                          }
+                          className="w-24 h-10 rounded-xl border border-border bg-surface px-3 text-xs text-text font-bold text-center"
+                        />
+                        <span className="text-xs text-text-muted">Jam (default: 24 Jam / 1x24 Jam)</span>
+                      </div>
+                      <span className="text-[10px] text-text-muted mt-1 block">
+                        Bila melewati batas waktu ini, reservasi otomatis dibatalkan agar buku tersedia lagi.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">
+                        Infaq Denda Keterlambatan:
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-text-muted">Rp</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="100"
+                          value={loanRules.finePerDay || 500}
+                          onChange={(e) =>
+                            setLoanRules({
+                              ...loanRules,
+                              finePerDay: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          className="w-32 h-10 rounded-xl border border-border bg-surface px-3 text-xs text-text font-bold text-center"
+                        />
+                        <span className="text-xs text-text-muted">/ hari / buku</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* TAB: POLA PENAMAAN SLIMS & BARCODE GENERATOR */}
+            {activeTab === 'SLIMS_CONFIG' && (
+              <form onSubmit={handleSaveSlimsPattern} className="space-y-6 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold font-display text-text flex items-center gap-2">
+                      <Barcode className="h-4 w-4 text-amber-500" />
+                      <span>Pola Kode Eksemplar SLiMS & Standarisasi Barcode</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Generator otomatis nomor inventaris fisik buku dan nomor panggil (Call Number) 3-baris standar SLiMS 9 Bulian
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Simpan Format SLiMS</span>
+                  </button>
+                </div>
+
+                {/* Preset Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-text block">
+                    Pilih Preset Pola Penamaan:
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                    {[
+                      {
+                        id: 'SBTH',
+                        title: 'Standar SBTH TK',
+                        sample: 'SBTH-B-00143',
+                        desc: 'Awalan SBTH-B- diikuti 5 digit nomor seri',
+                      },
+                      {
+                        id: 'SLIMS_STANDARD',
+                        title: 'SLiMS 9 Bulian',
+                        sample: 'B00143',
+                        desc: 'Awalan "B" standar bawaan sistem SLiMS',
+                      },
+                      {
+                        id: 'CATEGORY_BASED',
+                        title: 'Kode Kategori Rak',
+                        sample: 'DNG-00143',
+                        desc: 'Awalan sesuai rak (DNG, SAI, AKT)',
+                      },
+                      {
+                        id: 'CUSTOM',
+                        title: 'Kustom Bebas',
+                        sample: slimsPattern.prefix + '00143' + (slimsPattern.suffix || ''),
+                        desc: 'Tentukan awalan dan akhiran manual',
+                      },
+                    ].map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleApplyPreset(preset.id as any)}
+                        className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                          slimsPattern.patternMode === preset.id
+                            ? 'bg-amber-500/15 border-amber-500/60 shadow-2xs'
+                            : 'bg-surface border-border hover:bg-surface-2'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-text">{preset.title}</span>
+                            {slimsPattern.patternMode === preset.id && (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-1">{preset.desc}</p>
+                        </div>
+                        <div className="mt-2 font-mono text-[11px] font-bold text-amber-500 bg-surface-2 px-2 py-0.5 rounded-lg border border-border w-fit">
+                          {preset.sample}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Form Pattern Settings */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-4">
+                  <h4 className="text-xs font-bold text-text">Detail Konfigurasi Pola Nomor Barcode</h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">Prefix (Awalan):</label>
+                      <input
+                        type="text"
+                        value={slimsPattern.prefix}
+                        onChange={(e) => setSlimsPattern({ ...slimsPattern, prefix: e.target.value })}
+                        placeholder="SBTH-B- atau B"
+                        className="w-full h-10 rounded-xl border border-border bg-surface px-3 text-xs text-text font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">Panjang Seri (Digit):</label>
+                      <input
+                        type="number"
+                        min="3"
+                        max="10"
+                        value={slimsPattern.serialLength || 5}
+                        onChange={(e) =>
+                          setSlimsPattern({ ...slimsPattern, serialLength: parseInt(e.target.value) || 5 })
+                        }
+                        className="w-full h-10 rounded-xl border border-border bg-surface px-3 text-xs text-text font-mono font-bold text-center"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">Suffix (Akhiran):</label>
+                      <input
+                        type="text"
+                        value={slimsPattern.suffix || ''}
+                        onChange={(e) => setSlimsPattern({ ...slimsPattern, suffix: e.target.value })}
+                        placeholder="misal: /2026"
+                        className="w-full h-10 rounded-xl border border-border bg-surface px-3 text-xs text-text font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-text block mb-1">Nomor Urut Berikutnya:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={slimsPattern.nextNumber || 1}
+                        onChange={(e) =>
+                          setSlimsPattern({ ...slimsPattern, nextNumber: parseInt(e.target.value) || 1 })
+                        }
+                        className="w-full h-10 rounded-xl border border-border bg-surface px-3 text-xs text-amber-500 font-mono font-bold text-center"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live Preview Box */}
+                  <div className="p-3.5 rounded-xl bg-surface border border-border flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold text-text-muted block">
+                        Pratinjau Kode Eksemplar Baru Saat Tambah Buku:
+                      </span>
+                      <span className="font-mono text-base font-extrabold text-amber-500 tracking-wider">
+                        {slimsPattern.prefix}
+                        {String(slimsPattern.nextNumber || 1).padStart(slimsPattern.serialLength || 5, '0')}
+                        {slimsPattern.suffix || ''}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-emerald-500 font-semibold bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                      ✓ Kompatibel Scanner Barcode USB
+                    </span>
+                  </div>
+                </div>
+
+                {/* SLiMS 3-Line Call Number Reference Box */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-3">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-blue-500" />
+                    <h4 className="text-xs font-bold text-text">
+                      Standar Nomor Panggil Buku (Call Number 3-Baris SLiMS)
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-text-muted">
+                    Format ini otomatis dicetak pada stiker punggung buku untuk memudahkan guru dan anak mencari buku di rak:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-surface border border-border">
+                      <span className="text-[10px] font-bold text-blue-500 uppercase block">Baris 1: DDC Klasifikasi</span>
+                      <span className="font-mono text-xs font-bold text-text mt-1 block">398.2 (Dongeng & Fabel)</span>
+                      <span className="text-[10px] text-text-muted">Sains: 500, Aktivitas: 372.2</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-surface border border-border">
+                      <span className="text-[10px] font-bold text-emerald-500 uppercase block">Baris 2: 3 Huruf Pengarang</span>
+                      <span className="font-mono text-xs font-bold text-text mt-1 block">TIM (Huruf Besar)</span>
+                      <span className="text-[10px] text-text-muted">Dari 3 huruf nama pengarang</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-surface border border-border">
+                      <span className="text-[10px] font-bold text-purple-500 uppercase block">Baris 3: 1 Huruf Judul</span>
+                      <span className="font-mono text-xs font-bold text-text mt-1 block">d (Huruf Kecil)</span>
+                      <span className="text-[10px] text-text-muted">1 huruf pertama judul buku</span>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* TAB: CMS WARTA & PENGUMUMAN */}
+            {activeTab === 'CMS_NEWS' && (
+              <div className="space-y-6 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold font-display text-text flex items-center gap-2">
+                      <Newspaper className="h-4 w-4 text-amber-500" />
+                      <span>Warta & Pengumuman Perpustakaan (CMS)</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Kelola berita perpustakaan, jadwal libur, renovasi, atau pengumuman stock opname yang tampil di OPAC
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddNewsOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Terbitkan Warta Baru</span>
+                  </button>
+                </div>
+
+                {/* News List */}
+                <div className="space-y-3">
+                  {newsList.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-surface-2 border border-border text-text-muted text-xs">
+                      Belum ada warta atau pengumuman yang diterbitkan.
+                    </div>
+                  ) : (
+                    newsList.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`p-4 rounded-2xl border transition flex items-start justify-between gap-4 ${
+                          item.isActive
+                            ? 'bg-surface border-border shadow-2xs'
+                            : 'bg-surface-2/40 border-border opacity-60'
+                        }`}
+                      >
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                              {item.badgeText}
+                            </span>
+                            {item.isPinned && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-500 border border-purple-500/30">
+                                📌 Disematkan
+                              </span>
+                            )}
+                            <span className="text-[11px] text-text-muted">
+                              🗓️ {item.publishedDate} • oleh {item.author}
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-bold text-text truncate">{item.title}</h4>
+                          <p className="text-xs text-text-muted line-clamp-2">{item.summary}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleNews(item.id)}
+                            className={`p-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                              item.isActive
+                                ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                : 'text-text-muted hover:bg-surface-2'
+                            }`}
+                            title={item.isActive ? 'Nonaktifkan dari OPAC' : 'Aktifkan di OPAC'}
+                          >
+                            {item.isActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNews(item.id, item.title)}
+                            className="p-2 text-text-muted hover:text-rose-500 rounded-xl transition cursor-pointer"
+                            title="Hapus warta"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -874,6 +1496,129 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs"
                 >
                   Simpan Kategori
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add CMS News Sub-Modal */}
+      {isAddNewsOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-lg rounded-2xl bg-surface border border-border p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h4 className="text-sm font-bold text-text flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-amber-500" />
+                <span>Terbitkan Warta / Pengumuman Baru</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsAddNewsOpen(false)}
+                className="p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-2"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNews} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-xs font-semibold text-text block mb-1">Judul Warta / Pengumuman:</label>
+                <input
+                  type="text"
+                  required
+                  value={newsTitle}
+                  onChange={(e) => setNewsTitle(e.target.value)}
+                  placeholder="Misal: Perpustakaan Buka Kembali Setelah Stock Opname"
+                  className="w-full h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text outline-hidden"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-text block mb-1">Kategori:</label>
+                  <select
+                    value={newsCategory}
+                    onChange={(e) => {
+                      const cat = e.target.value as LibraryNewsArticle['category'];
+                      setNewsCategory(cat);
+                      if (cat === 'HOLIDAY') setNewsBadge('LIBUR');
+                      else if (cat === 'STOCK_OPNAME') setNewsBadge('STOCK OPNAME');
+                      else if (cat === 'EVENT') setNewsBadge('AGENDA');
+                      else if (cat === 'NEW_BOOKS') setNewsBadge('KOLEKSI BARU');
+                      else setNewsBadge('PENGUMUMAN');
+                    }}
+                    className="w-full h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text outline-hidden"
+                  >
+                    <option value="ANNOUNCEMENT">📢 Pengumuman Umum</option>
+                    <option value="HOLIDAY">🏖️ Libur Sekolah / Perpus Tutup</option>
+                    <option value="STOCK_OPNAME">📋 Stock Opname / Renovasi</option>
+                    <option value="EVENT">🎉 Agenda / Hari Mendongeng</option>
+                    <option value="NEW_BOOKS">📚 Buku Baru Masuk</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-text block mb-1">Teks Badge / Label:</label>
+                  <input
+                    type="text"
+                    value={newsBadge}
+                    onChange={(e) => setNewsBadge(e.target.value)}
+                    placeholder="PENGUMUMAN"
+                    className="w-full h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text outline-hidden font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text block mb-1">Ringkasan Singkat (Muncul di Banner):</label>
+                <input
+                  type="text"
+                  value={newsSummary}
+                  onChange={(e) => setNewsSummary(e.target.value)}
+                  placeholder="Ringkasan 1-2 kalimat untuk teks berjalan / banner atas..."
+                  className="w-full h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-text block mb-1">Isi Lengkap Warta:</label>
+                <textarea
+                  rows={4}
+                  required
+                  value={newsContent}
+                  onChange={(e) => setNewsContent(e.target.value)}
+                  placeholder="Tuliskan detail pengumuman, tanggal buka kembali, ketentuan peminjaman, dll..."
+                  className="w-full p-3 rounded-xl border border-border bg-surface-2 text-xs text-text outline-hidden resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="pinNewsCheckbox"
+                  checked={newsPinned}
+                  onChange={(e) => setNewsPinned(e.target.checked)}
+                  className="rounded border-border text-amber-500 focus:ring-amber-500 h-4 w-4"
+                />
+                <label htmlFor="pinNewsCheckbox" className="text-xs text-text font-semibold cursor-pointer">
+                  📌 Sematkan di urutan paling atas (Pinned)
+                </label>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsAddNewsOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-text-muted hover:bg-surface-2 rounded-xl"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs"
+                >
+                  Terbitkan Warta
                 </button>
               </div>
             </form>

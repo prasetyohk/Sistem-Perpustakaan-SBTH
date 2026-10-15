@@ -29,6 +29,7 @@ import {
   Check,
   Table as TableIcon,
   ClipboardCheck,
+  Download,
 } from 'lucide-react';
 import { Book, BookItem, BookStatus, CategoryId, Language, ShelfLocationItem, Category } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
@@ -251,6 +252,19 @@ export const BookManagement: React.FC<BookManagementProps> = ({
             >
               <Printer className="h-4 w-4 text-text-muted" />
               <span>{t.printLabelsBtn || 'Cetak Label'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                libraryStore.exportSlimsCsv();
+                soundFx.playSuccessChime();
+              }}
+              className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              title="Ekspor Seluruh Katalog & Eksemplar ke Format CSV Standar SLiMS (Senayan)"
+            >
+              <Download className="h-4 w-4 text-emerald-500" />
+              <span>Ekspor SLiMS</span>
             </button>
           </>
         }

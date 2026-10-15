@@ -44,6 +44,8 @@ export interface Book {
   synopsis: string;
   coverImage: string;
   shelfLocation?: string; // e.g. "Rak A (Dongeng) - Baris 2"
+  callNumber?: string;    // Nomor Panggil SLiMS (e.g. "398.2 PUS d")
+  classification?: string; // Klasifikasi DDC (e.g. "398.2")
   priceValue?: number;     // Estimasi nilai buku (Rp)
   assetValue?: number;     // Estimasi nilai buku / nilai aset (Rp)
   acquisitionSource?: AcquisitionSource;
@@ -122,6 +124,8 @@ export interface Loan {
   handledBy: string;
   notes?: string;
   items: LoanItem[];
+  renewalCount?: number;   // Berapa kali pinjaman ini sudah diperpanjang (default: 0)
+  lastRenewedAt?: string;  // YYYY-MM-DD
 }
 
 export type FineType = 'DENDA_TERLAMBAT' | 'GANTI_RUSAK' | 'GANTI_HILANG' | 'SUMBANGAN_TUNAI';
@@ -254,9 +258,62 @@ export interface ReminderSchedule {
   lastRunAt?: string;
 }
 
+export interface MemberTypeRule {
+  memberType: MemberType;
+  label: string;
+  maxBooks: number;
+  loanDurationDays: number;
+  maxRenewals: number;
+}
+
+export interface Reservation {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  bookAuthor?: string;
+  coverImage?: string;
+  memberId: string;
+  memberName: string;
+  memberClass: string;
+  parentPhone?: string;
+  requestDate: string; // YYYY-MM-DD HH:mm
+  expiryDate: string;  // YYYY-MM-DD HH:mm (e.g. 24 jam setelah buku ready)
+  status: 'PENDING' | 'READY_FOR_PICKUP' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED';
+  notifiedAt?: string;
+  handledBy?: string;
+  notes?: string;
+}
+
+export interface LibraryNewsArticle {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  category: 'ANNOUNCEMENT' | 'EVENT' | 'HOLIDAY' | 'STOCK_OPNAME' | 'NEW_BOOKS';
+  badgeText: string;
+  publishedDate: string; // YYYY-MM-DD
+  isPinned: boolean;
+  isActive: boolean;
+  author: string;
+}
+
+export interface SlimsPatternConfig {
+  patternMode: 'SBTH' | 'SLIMS_STANDARD' | 'CATEGORY_BASED' | 'CUSTOM';
+  prefix: string; // e.g. "SBTH-B-" or "B" or "DNG-"
+  serialLength: number; // e.g. 5
+  suffix: string; // e.g. "" or "/P/2026"
+  nextNumber: number; // e.g. 143
+}
+
 export interface LoanRules {
   finePerDay: number; // default: 500 (Rp per hari per buku)
-  loanDurationDays: number; // default: 7 hari
+  loanDurationDays: number; // default: 7 hari (Siswa)
+  maxBooksLimit: number; // default: 2 buku (Siswa)
+  maxRenewals: number; // default: 1x perpanjangan
+  renewalDurationDays: number; // default: 7 hari
+  allowedDurations: number[]; // e.g. [3, 7, 14, 30]
+  reservationExpiryHours: number; // default: 24 (jam)
+  memberTypeRules: MemberTypeRule[];
   reminderDayBefore: number; // default: 1 (artinya dikirim di hari ke-6 untuk durasi 7 hari)
   reminderTimeStr: string; // default: "09:00"
   finesPurpose: string; // Tujuan kas/denda
