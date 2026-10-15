@@ -4,7 +4,7 @@ color 0A
 
 echo ========================================================
 echo        SISTEM INFORMASI PERPUSTAKAAN SBTH TK
-echo      (Katalog Visual Anak, Sirkulasi, Label & Bot)
+echo      (Katalog Visual Anak, Sirkulasi, Label dan Bot)
 echo ========================================================
 echo.
 

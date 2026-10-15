@@ -1,11 +1,11 @@
 @echo off
-title PERPUSTAKAAN DIGITAL SBTH - SERVER LAN & WINDOWS APP
+title PERPUSTAKAAN DIGITAL SBTH - SERVER LAN DAN WINDOWS APP
 color 0A
 cls
 
 echo ======================================================================
 echo    PERPUSTAKAAN DIGITAL KB-TK BHAKTI TUNAS HARAPAN (SBTH)
-echo    Aplikasi Siap Pakai & Server Jaringan Lokal (Multi-PC LAN)
+echo    Aplikasi Siap Pakai dan Server Jaringan Lokal (Multi-PC LAN)
 echo ======================================================================
 echo.
 

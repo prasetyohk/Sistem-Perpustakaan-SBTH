@@ -1210,7 +1210,9 @@ Periode: Minggu ke-2 Oktober 2026
     if (!this.isClient()) return DEFAULT_SCHOOL_PROFILE;
     const data = localStorage.getItem(STORAGE_KEYS.SCHOOL_PROFILE);
     if (!data) {
-      this.saveSchoolProfile(DEFAULT_SCHOOL_PROFILE);
+      try {
+        localStorage.setItem(STORAGE_KEYS.SCHOOL_PROFILE, JSON.stringify(DEFAULT_SCHOOL_PROFILE));
+      } catch {}
       return DEFAULT_SCHOOL_PROFILE;
     }
     try {
@@ -1232,9 +1234,21 @@ Periode: Minggu ke-2 Oktober 2026
 
   public saveSchoolProfile(profile: Partial<SchoolProfile>): void {
     if (!this.isClient()) return;
-    const current = this.getSchoolProfile();
-    const updated: SchoolProfile = { ...current, ...profile };
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_PROFILE, JSON.stringify(updated));
+    let base = DEFAULT_SCHOOL_PROFILE;
+    const data = localStorage.getItem(STORAGE_KEYS.SCHOOL_PROFILE);
+    if (data) {
+      try {
+        base = { ...DEFAULT_SCHOOL_PROFILE, ...JSON.parse(data) };
+      } catch {
+        base = DEFAULT_SCHOOL_PROFILE;
+      }
+    }
+    const updated: SchoolProfile = { ...base, ...profile };
+    try {
+      localStorage.setItem(STORAGE_KEYS.SCHOOL_PROFILE, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save school profile', e);
+    }
   }
 
   // --- TRILINGUAL LANGUAGE SYSTEM (id | en | zh) ---
