@@ -8,17 +8,18 @@
 1. [Instalasi Apa Saja yang Dibutuhkan](#1-instalasi-apa-saja-yang-dibutuhkan)
 2. [Mode 1-Klik Jalankan Aplikasi (Ikon Desktop Resmi)](#2-mode-1-klik-jalankan-aplikasi-ikon-desktop-resmi)
 3. [Menghubungkan Komputer Pusat & Komputer Klien (Multi-PC LAN)](#3-menghubungkan-komputer-pusat--komputer-klien-multi-pc-lan)
-4. [Keamanan Tingkat Tinggi (Anti Bocor Data & Proteksi PIN)](#4-keamanan-tingkat-tinggi-anti-bocor-data--proteksi-pin)
+4. [Keamanan Data & Penyimpanan Pengaturan Permanen (Anti-Reset)](#4-keamanan-data--penyimpanan-pengaturan-permanen-anti-reset)
 5. [Aktivasi & Masuk ke Mode Pustakawan (Admin PIN: 1234 & sbth2026)](#5-aktivasi--masuk-ke-mode-pustakawan-admin-pin-1234--sbth2026)
-6. [Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)](#6-sirkulasi-peminjaman--perpanjangan-pencarian-nama--username)
-7. [Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)](#7-manajemen-anggota-username-unik--pemakaian-ulang-akun)
-8. [Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)](#8-lupa-username--password-siswa-kirim-langsung-ke-whatsapp-ortu)
-9. [Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)](#9-mode-reservasi-mandiri-siswa-timer-rundown-1x24-jam)
-10. [Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)](#10-panduan-penggunaan-format-slims--barcode-4-langkah-mudah)
-11. [Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)](#11-penomoran-ulang-massal-barcode--fitur-pemulihan-restore)
-12. [CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)](#12-cms-warta--pengumuman-multi-disematkan-auto-carousel)
-13. [Ekspor Cadangan Master Excel & SLiMS CSV](#13-ekspor-cadangan-master-excel--slims-csv)
-14. [Kontak Bantuan Teknis](#14-kontak-bantuan-teknis)
+6. [Input Buku Baru & Scan ISBN Cepat (Autofill Dinamis & Ganti Buku Cepat)](#6-input-buku-baru--scan-isbn-cepat-autofill-dinamis--ganti-buku-cepat)
+7. [Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)](#7-sirkulasi-peminjaman--perpanjangan-pencarian-nama--username)
+8. [Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)](#8-manajemen-anggota-username-unik--pemakaian-ulang-akun)
+9. [Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)](#9-lupa-username--password-siswa-kirim-langsung-ke-whatsapp-ortu)
+10. [Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)](#10-mode-reservasi-mandiri-siswa-timer-rundown-1x24-jam)
+11. [Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)](#11-panduan-penggunaan-format-slims--barcode-4-langkah-mudah)
+12. [Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)](#12-penomoran-ulang-massal-barcode--fitur-pemulihan-restore)
+13. [CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)](#13-cms-warta--pengumuman-multi-disematkan-auto-carousel)
+14. [Ekspor Cadangan Master Excel & SLiMS CSV](#14-ekspor-cadangan-master-excel--slims-csv)
+15. [Kontak Bantuan Teknis](#15-kontak-bantuan-teknis)
 
 ---
 
@@ -91,16 +92,24 @@ Sistem ini didesain agar satu server di perpustakaan dapat melayani banyak kompu
 
 ---
 
-## 4. Keamanan Tingkat Tinggi (Anti Bocor Data & Proteksi PIN)
+## 4. Keamanan Data & Penyimpanan Pengaturan Permanen (Anti-Reset)
 
-Untuk menjaga kerahasiaan data siswa dan sekolah:
-1. **Arsitektur Database Offline-First (Local Storage & Local Backup):**
-   - Seluruh data siswa, nomor WhatsApp orang tua, dan riwayat sirkulasi disimpan secara **lokal di komputer sekolah**.
-   - Data **tidak pernah diunggah ke cloud publik pihak ketiga**, sehingga bebas dari risiko kebocoran data (*data breach*) di internet.
-2. **Proteksi Autentikasi Ganda Pustakawan:**
+Untuk menjaga kenyamanan operasional staf dan kerahasiaan data sekolah:
+1. **Penyimpanan Pengaturan & Mode Kerja Permanen (Tidak Mengulang):**
+   - Seluruh preferensi pustakawan tersimpan secara otomatis di memori lokal peramban:
+     - **Tab Terakhir** (OPAC, Meja Sirkulasi, Koleksi Buku, atau Data Anggota).
+     - **Sub-Tab Sirkulasi** (Pinjam Baru, Pengembalian, Perpanjangan, Terlambat, Audit).
+     - **Mode Tampilan** (Tampilan Kartu, Tabel, atau Grid) pada katalog buku, daftar anggota, dan OPAC anak.
+     - **Efek Suara Suasana (Sound FX)**: Pilihan menyala/senyap (*mute*) tersimpan permanen.
+     - **Tema Warna**: Dark Mode / Light Mode tetap aktif sesuai pilihan terakhir.
+   - Setiap kali peramban ditutup atau komputer dimatikan, saat dibuka kembali **seluruh pengaturan yang sudah disimpan akan terbuka persis seperti semula tanpa reset**.
+2. **Database Offline-First & Perlindungan Koleksi:**
+   - Seluruh data judul buku riil, eksemplar, anggota, nomor WhatsApp, dan riwayat sirkulasi tersimpan di komputer sekolah.
+   - Sistem memiliki proteksi anti-timpa sehingga buku riil yang sudah diinput pustakawan tidak akan pernah ter-reset atau terhapus oleh data mock-up demo.
+3. **Proteksi Autentikasi Ganda Pustakawan:**
    - Mode staf perpustakaan terkunci rapat di balik PIN Keamanan.
    - Tanpa PIN, layar hanya menampilkan Katalog Visual Anak (OPAC) yang aman disentuh anak-anak tanpa khawatir merusak setelan.
-3. **Pencadangan Rutin (Snapshot Backup):**
+4. **Pencadangan Rutin (Snapshot Backup):**
    - Sebelum melakukan perubahan besar (seperti penomoran ulang barcode massal), sistem secara otomatis membuat *Backup Snapshot* lokal.
    - Pustakawan dapat mengunduh seluruh database perpustakaan ke dalam format **Excel 5-Sheet Lengkap** kapan saja untuk arsip offline.
 
@@ -120,7 +129,31 @@ Secara bawaan, aplikasi akan membuka Katalog Visual Anak (OPAC). Untuk masuk ke 
 
 ---
 
-## 6. Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)
+## 6. Input Buku Baru & Scan ISBN Cepat (Autofill Dinamis & Ganti Buku Cepat)
+
+Buka menu **Koleksi & Eksemplar ➔ + Scan ISBN / Tambah Buku**:
+
+### A. Alur Scan ISBN & Autofill Otomatis:
+1. **Arahkan USB Barcode Scanner** ke barcode ISBN pabrik (13 digit) di sampul belakang buku, atau ketik nomor ISBN di kolom yang tersedia.
+2. Sistem otomatis menarik metadata resmi buku (Judul, Penulis, Penerbit, Tahun, DDC Klasifikasi, dan Sampul HD).
+
+### B. Penggantian Buku Dinamis (Tanpa Perlu Tutup & Buka Ulang Modal):
+- **Jika Buku Sudah Terdaftar di Perpustakaan SBTH:**
+  - Kotak bawah akan menampilkan kartu hijau: *"Buku Sudah Terdaftar di Perpustakaan SBTH"* beserta total eksemplar yang sudah ada di rak.
+- **Jika Ingin Mengganti Buku Lain atau Mengetik Judul Baru:**
+  - Anda **TIDAK PERLU MENUTUP (CLOSE) DAN MEMBUKA ULANG ISBN**.
+  - Cukup ketik judul baru di kotak pencarian cepat (misal: `"Kancil"`, `"Dinosaurus"`) atau ketik ISBN baru.
+  - Jika Anda mengklik salah satu kartu saran buku (baik koleksi perpustakaan maupun buku baru online), **tampilan bawah otomatis langsung berganti seketika**!
+  - Untuk buku baru, form input dan autofill lengkap langsung terbuka siap disimpan.
+  - Tersedia pula tombol cepat `[ 🔄 Ganti / Input Buku Baru ]` pada kartu buku terdaftar untuk mengosongkan status secara instan.
+
+### C. Default Jumlah Eksemplar adalah 1 (Bukan 3):
+- Jumlah eksemplar default saat menambahkan buku baru kini ditetapkan **1 Eksemplar**, sehingga aman dan pas untuk pengadaan satuan tanpa menghasilkan barcode berlebih.
+- Jika perpustakaan menerima beberapa salinan sekaligus, cukup pilih tombol cepat `[+2 Eksemplar]`, `[+3 Eksemplar]`, `[+5 Eksemplar]`, atau ketik jumlah yang diinginkan.
+
+---
+
+## 7. Sirkulasi Peminjaman & Perpanjangan (Pencarian Nama & Username)
 
 Meja Sirkulasi Pustakawan memudahkan pencarian anggota secara fleksibel:
 - **Mode Peminjaman Baru:**
@@ -133,7 +166,7 @@ Meja Sirkulasi Pustakawan memudahkan pencarian anggota secara fleksibel:
 
 ---
 
-## 7. Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)
+## 8. Manajemen Anggota (Username Unik & Pemakaian Ulang Akun)
 
 Buka menu **Anggota & Kartu ➔ + Tambah Anggota**:
 1. **Wajib Mengisi Username:**
@@ -146,7 +179,7 @@ Buka menu **Anggota & Kartu ➔ + Tambah Anggota**:
 
 ---
 
-## 8. Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)
+## 9. Lupa Username & Password Siswa (Kirim Langsung ke WhatsApp Ortu)
 
 Jika siswa atau orang tua lupa data akun login:
 1. Klik tombol **🎒 Masuk Akun Siswa & Ortu** di pojok kanan atas.
@@ -159,7 +192,7 @@ Jika siswa atau orang tua lupa data akun login:
 
 ---
 
-## 9. Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)
+## 10. Mode Reservasi Mandiri Siswa (Timer Rundown 1x24 Jam)
 
 Aturan ketat reservasi antrean buku:
 1. **Mode Tamu Umum Dimatikan:**
@@ -175,7 +208,7 @@ Aturan ketat reservasi antrean buku:
 
 ---
 
-## 10. Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)
+## 11. Panduan Penggunaan Format SLiMS & Barcode (4 Langkah Mudah)
 
 Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Pola SLiMS & Barcode"**:
 
@@ -207,7 +240,7 @@ Jika sudah memilih kotak di Langkah 1, langsung klik tombol oranye **"Simpan For
 
 ---
 
-## 11. Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)
+## 12. Penomoran Ulang Massal Barcode & Fitur Pemulihan (Restore)
 
 Di panel SLiMS tersedia fitur canggih untuk mengubah format seluruh koleksi:
 - **Tombol `[ Ubah Semua Kode Buku Lama Mengikuti Pola Ini ]`:**
@@ -222,7 +255,7 @@ Di panel SLiMS tersedia fitur canggih untuk mengubah format seluruh koleksi:
 
 ---
 
-## 12. CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)
+## 13. CMS Warta & Pengumuman Multi-Disematkan (Auto-Carousel)
 
 Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Warta Perpus (CMS)"**:
 - Pustakawan dapat menerbitkan banyak pengumuman sekaligus (Jadwal Libur, Stock Opname, Agenda Dongeng, Buku Baru).
@@ -235,7 +268,7 @@ Buka menu **Lainnya ➔ Pengaturan ➔ Tab "Warta Perpus (CMS)"**:
 
 ---
 
-## 13. Ekspor Cadangan Master Excel & SLiMS CSV
+## 14. Ekspor Cadangan Master Excel & SLiMS CSV
 
 Pustakawan dapat mengamankan data secara berkala:
 1. **Master Excel 5-Sheet Yayasan SBTH:**
@@ -248,7 +281,7 @@ Pustakawan dapat mengamankan data secara berkala:
 
 ---
 
-## 14. Kontak Bantuan Teknis
+## 15. Kontak Bantuan Teknis
 
 Aplikasi ini dikembangkan dan didukung penuh oleh:
 - **Nama**: Prasetyo Handy Kurniawan

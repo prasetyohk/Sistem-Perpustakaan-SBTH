@@ -30,6 +30,8 @@ import {
   LayoutGrid,
   Globe,
   MessageSquare,
+  Keyboard,
+  History,
 } from 'lucide-react';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { KidsVisualOpac } from '@/components/opac/KidsVisualOpac';
@@ -46,6 +48,9 @@ import { WhatsAppCenterModal } from '@/components/whatsapp/WhatsAppCenterModal';
 import { DeveloperProfileModal } from '@/components/developer/DeveloperProfileModal';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { PinAuthModal } from '@/components/auth/PinAuthModal';
+import { AdminAuthModal } from '@/components/auth/AdminAuthModal';
+import { ShortcutHelpModal } from '@/components/common/ShortcutHelpModal';
+import { ActivityLogModal } from '@/components/audit/ActivityLogModal';
 import { AnalyticsModal } from '@/components/analytics/AnalyticsModal';
 import { StudentPortalModal } from '@/components/portal/StudentPortalModal';
 import { soundFx } from '@/lib/sound';
@@ -71,7 +76,13 @@ export default function Home() {
   const [isTelegramOpen, setIsTelegramOpen] = useState<boolean>(false);
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isAdminAuthOpen, setIsAdminAuthOpen] = useState<boolean>(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
+  const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState<boolean>(false);
+  const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
+  const [circulationSubTab, setCirculationSubTab] = useState<
+    'BORROW' | 'RETURN' | 'RENEW' | 'OVERDUE' | 'INSPECT'
+  >('BORROW');
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState<boolean>(false);
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState<boolean>(false);
@@ -130,7 +141,155 @@ export default function Home() {
       document.documentElement.classList.remove('dark');
       document.documentElement.setAttribute('data-theme', 'light');
     }
+
+    // Restore saved active tab, subtab, and sound settings
+    const savedTab = localStorage.getItem('sbth_active_tab') as any;
+    if (savedTab && ['OPAC', 'CIRCULATION', 'BOOKS', 'MEMBERS'].includes(savedTab)) {
+      setActiveTab(savedTab);
+    }
+    const savedCircSub = localStorage.getItem('sbth_circulation_subtab') as any;
+    if (savedCircSub && ['BORROW', 'RETURN', 'RENEW', 'OVERDUE', 'INSPECT'].includes(savedCircSub)) {
+      setCirculationSubTab(savedCircSub);
+    }
+    const savedSound = localStorage.getItem('sbth_sound_fx');
+    if (savedSound !== null) {
+      const isEnabled = savedSound === 'true';
+      setIsSoundOn(isEnabled);
+      soundFx.setSoundEnabled(isEnabled);
+    }
   }, [dataVersion, language]);
+
+  // Persist activeTab & circulationSubTab
+  useEffect(() => {
+    if (typeof window !== 'undefined' && appMode === 'PUSTAKAWAN') {
+      localStorage.setItem('sbth_active_tab', activeTab);
+    }
+  }, [activeTab, appMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sbth_circulation_subtab', circulationSubTab);
+    }
+  }, [circulationSubTab]);
+
+  // Global Keyboard Shortcuts for Librarian Mode (Ctrl+Q, Ctrl+W, Ctrl+E, Ctrl+R, Ctrl+M, Ctrl+K, Ctrl+P, F1)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F1 opens Shortcut Help Modal in any tab
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setIsShortcutHelpOpen((prev) => !prev);
+        return;
+      }
+
+      // Escape closes open submodals
+      if (e.key === 'Escape') {
+        if (isShortcutHelpOpen) {
+          setIsShortcutHelpOpen(false);
+          return;
+        }
+        if (isAdminAuthOpen) {
+          setIsAdminAuthOpen(false);
+          return;
+        }
+      }
+
+      // Ignore shortcuts if user is typing in form inputs
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+
+      // Only listen in PUSTAKAWAN mode
+      if (appMode !== 'PUSTAKAWAN') return;
+
+      const sc = libraryStore.getKeyboardShortcuts();
+
+      const matchShortcut = (keyCombo: string | undefined): boolean => {
+        if (!keyCombo) return false;
+        const parts = keyCombo.split('+').map((p) => p.trim().toLowerCase());
+        const hasCtrl = parts.includes('control') || parts.includes('ctrl');
+        const hasAlt = parts.includes('alt');
+        const hasShift = parts.includes('shift');
+        const mainKey = parts.filter((p) => !['control', 'ctrl', 'alt', 'shift'].includes(p))[0] || '';
+
+        if (hasCtrl && !(e.ctrlKey || e.metaKey)) return false;
+        if (!hasCtrl && (e.ctrlKey || e.metaKey)) return false;
+        if (hasAlt !== e.altKey) return false;
+        if (hasShift !== e.shiftKey) return false;
+
+        return e.key.toLowerCase() === mainKey.toLowerCase();
+      };
+
+      if (matchShortcut(sc.newLoan || 'Control+q')) {
+        e.preventDefault();
+        setActiveTab('CIRCULATION');
+        setCirculationSubTab('BORROW');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.returnBook || 'Control+t')) {
+        e.preventDefault();
+        setActiveTab('CIRCULATION');
+        setCirculationSubTab('RETURN');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.renewLoan || 'Control+e')) {
+        e.preventDefault();
+        setActiveTab('CIRCULATION');
+        setCirculationSubTab('RENEW');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.overdueTab || 'Control+r')) {
+        e.preventDefault();
+        setActiveTab('CIRCULATION');
+        setCirculationSubTab('OVERDUE');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.booksTab || 'Control+b')) {
+        e.preventDefault();
+        setActiveTab('BOOKS');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.membersTab || 'Control+m')) {
+        e.preventDefault();
+        setActiveTab('MEMBERS');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.opacTab || 'Control+k')) {
+        e.preventDefault();
+        setActiveTab('OPAC');
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.settingsModal || 'Control+p')) {
+        e.preventDefault();
+        setIsAdminAuthOpen(true);
+        soundFx.playScanBeep();
+        return;
+      }
+      if (matchShortcut(sc.helpModal || 'F1')) {
+        e.preventDefault();
+        setIsShortcutHelpOpen(true);
+        soundFx.playScanBeep();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [appMode, isShortcutHelpOpen, isAdminAuthOpen]);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -176,6 +335,9 @@ export default function Home() {
     const next = !isSoundOn;
     setIsSoundOn(next);
     soundFx.setSoundEnabled(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sbth_sound_fx', String(next));
+    }
   };
 
   const handleOpenLabelPrinterWithBarcodes = (barcodes: string[]) => {
@@ -393,12 +555,36 @@ export default function Home() {
                         <span>Portal Mandiri Siswa</span>
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLogModalOpen(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-left rounded-lg text-xs font-medium text-text hover:bg-surface-2 flex items-center gap-2.5 transition"
+                      >
+                        <History className="h-4 w-4 text-emerald-500" />
+                        <span>Log Riwayat & Audit Sistem</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsShortcutHelpOpen(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-left rounded-lg text-xs font-medium text-text hover:bg-surface-2 flex items-center gap-2.5 transition"
+                      >
+                        <Keyboard className="h-4 w-4 text-amber-500" />
+                        <span>Panduan Pintasan (F1)</span>
+                      </button>
+
                       <div className="border-t border-border/60 my-1"></div>
 
                       <button
                         type="button"
                         onClick={() => {
-                          setIsSettingsOpen(true);
+                          setIsAdminAuthOpen(true);
                           setIsMoreMenuOpen(false);
                         }}
                         className="w-full px-3 py-2 text-left rounded-lg text-xs font-medium text-text hover:bg-surface-2 flex items-center gap-2.5 transition"
@@ -409,6 +595,20 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+
+                {/* Pintasan Keyboard Button (F1) */}
+                <button
+                  type="button"
+                  onClick={() => setIsShortcutHelpOpen(true)}
+                  className="h-9 px-2.5 rounded-lg border border-border bg-surface hover:bg-surface-2 text-text text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+                  title="Panduan Pintasan Keyboard Pustakawan (F1)"
+                >
+                  <Keyboard className="h-3.5 w-3.5 text-amber-500" />
+                  <span className="hidden sm:inline">Pintasan</span>
+                  <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-surface-2 border border-border rounded-md text-text-muted">
+                    F1
+                  </kbd>
+                </button>
               </>
             )}
 
@@ -609,6 +809,7 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
         {activeTab === 'OPAC' && (
           <KidsVisualOpac
+            language={language}
             onSelectBookForLoan={(book) => {
               setActiveTab('CIRCULATION');
             }}
@@ -621,6 +822,7 @@ export default function Home() {
           <CirculationDesk
             scannedCode={activeCirculationScan}
             onClearScannedCode={() => setActiveCirculationScan('')}
+            initialSubTab={circulationSubTab}
             onOpenScannerCamera={(title) => {
               setCameraTitle(title);
               setIsCameraOpen(true);
@@ -630,6 +832,7 @@ export default function Home() {
 
         {activeTab === 'BOOKS' && (
           <BookManagement
+            key={dataVersion}
             language={language}
             onOpenScanIsbn={() => {
               setScannedIsbnToLookup('');
@@ -639,7 +842,12 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'MEMBERS' && <MemberManagement />}
+        {activeTab === 'MEMBERS' && (
+          <MemberManagement
+            key={dataVersion}
+            onRefresh={() => handleRefreshData()}
+          />
+        )}
       </main>
 
       {/* 5. UNIFIED CLEAN FOOTER */}
@@ -749,10 +957,40 @@ export default function Home() {
 
       <StudentPortalModal
         isOpen={isStudentPortalOpen}
+        language={language}
         onClose={() => {
           setIsStudentPortalOpen(false);
           handleRefreshData();
         }}
+      />
+
+      <AdminAuthModal
+        isOpen={isAdminAuthOpen}
+        onClose={() => setIsAdminAuthOpen(false)}
+        onSuccess={() => {
+          setIsAdminAuthOpen(false);
+          setIsSettingsOpen(true);
+        }}
+      />
+
+      <ShortcutHelpModal
+        isOpen={isShortcutHelpOpen}
+        onClose={() => setIsShortcutHelpOpen(false)}
+        onOpenSettings={() => {
+          setIsShortcutHelpOpen(false);
+          setIsAdminAuthOpen(true);
+        }}
+        onNavigate={(tab, subTab) => {
+          setIsShortcutHelpOpen(false);
+          setActiveTab(tab);
+          if (subTab) setCirculationSubTab(subTab as any);
+          soundFx.playSuccessChime();
+        }}
+      />
+
+      <ActivityLogModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
       />
 
       <PinAuthModal

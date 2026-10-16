@@ -35,14 +35,23 @@ interface CirculationDeskProps {
   onOpenScannerCamera?: (title: string) => void;
   scannedCode?: string;
   onClearScannedCode?: () => void;
+  initialSubTab?: 'BORROW' | 'RETURN' | 'RENEW' | 'OVERDUE' | 'INSPECT';
 }
 
 export const CirculationDesk: React.FC<CirculationDeskProps> = ({
   onOpenScannerCamera,
   scannedCode,
   onClearScannedCode,
+  initialSubTab,
 }) => {
   const [activeTab, setActiveTab] = useState<'BORROW' | 'RETURN' | 'RENEW' | 'OVERDUE' | 'INSPECT'>('BORROW');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
   const [inspectBarcode, setInspectBarcode] = useState<string>('SBTH-B-00101');
 
   // Borrow Flow State
@@ -56,10 +65,15 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
 
   // Return Flow State
   const [returnBarcode, setReturnBarcode] = useState<string>('');
+  const [returnSelectedMember, setReturnSelectedMember] = useState<Member | null>(null);
+  const [returnMemberSearch, setReturnMemberSearch] = useState<string>('');
   const [lastReturnedInfo, setLastReturnedInfo] = useState<{
     item: BookItem;
     book?: Book;
     member?: Member;
+    loanDate?: string;
+    returnDate?: string;
+    condition?: 'GOOD' | 'DAMAGED' | 'LOST';
   } | null>(null);
   const [returnCondition, setReturnCondition] = useState<'GOOD' | 'DAMAGED' | 'LOST'>('GOOD');
   const [todayStr, setTodayStr] = useState<string>('2026-10-15');
@@ -182,11 +196,15 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
     }
 
     try {
+      const activeLibrarian = libraryStore.getCurrentLibrarian();
+      const librarianName = activeLibrarian?.name || 'Pustakawan SBTH';
+
       libraryStore.createLoan(
         selectedMember.id,
         cartBarcodes,
         loanDurationDays,
-        'Peminjaman via Sirkulasi Cepat Meja Pustakawan'
+        'Peminjaman via Sirkulasi Cepat Meja Pustakawan',
+        librarianName
       );
 
       soundFx.playSuccessChime();
@@ -197,7 +215,7 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
       });
 
       alert(
-        `🎉 Sukses! Peminjaman ${cartBarcodes.length} buku untuk "${selectedMember.name}" berhasil dicatat.\nJatuh tempo dalam ${loanDurationDays} hari.`
+        `🎉 Sukses! Peminjaman ${cartBarcodes.length} buku untuk "${selectedMember.name}" berhasil dicatat oleh ${librarianName}.\nJatuh tempo dalam ${loanDurationDays} hari.`
       );
 
       // Reset flow
@@ -214,7 +232,10 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
     const clean = barcodeToReturn.trim().toUpperCase();
     if (!clean) return;
 
-    const result = libraryStore.returnLoanItem(clean, returnCondition);
+    const activeLibrarian = libraryStore.getCurrentLibrarian();
+    const librarianName = activeLibrarian?.name || 'Pustakawan SBTH';
+
+    const result = libraryStore.returnLoanItem(clean, returnCondition, '', librarianName);
 
     if (!result.success) {
       alert(result.message);
@@ -225,12 +246,17 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
     const item = allItems.find((i) => i.itemBarcode.toUpperCase() === clean);
     if (!item) return;
 
-    const book = allBooks.find((b) => b.id === item.bookId);
+    const returningMember = (result.member || returnSelectedMember) || undefined;
+    const loanDate = result.loan?.loanDate;
+    const returnedBook = libraryStore.getBooks().find((b) => b.id === item.bookId);
 
     setLastReturnedInfo({
       item,
-      book,
-      member: result.member,
+      book: returnedBook,
+      member: returningMember,
+      loanDate: loanDate || todayStr,
+      returnDate: todayStr,
+      condition: returnCondition,
     });
 
     // Check if there is an active reservation for this book
@@ -238,9 +264,9 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
     if (resCheck) {
       setReservedHoldNotice({
         reservation: resCheck,
-        bookTitle: resCheck.bookTitle || book?.title || 'Buku SBTH',
+        bookTitle: resCheck.bookTitle || returnedBook?.title || 'Buku SBTH',
       });
-      alert(`🔔 PERHATIAN: BUKU TELAH DI-RESERVASI!\nBuku "${book?.title}" sedang dibooking oleh ${resCheck.memberName} (${resCheck.memberClass}).\nMohon simpan di rak reservasi khusus (Masa tunggu 24 jam).`);
+      alert(`🔔 PERHATIAN: BUKU TELAH DI-RESERVASI!\nBuku "${returnedBook?.title || 'Buku Cerita'}" sedang dibooking oleh ${resCheck.memberName} (${resCheck.memberClass}).\nMohon simpan di rak reservasi khusus (Masa tunggu 24 jam).`);
     }
 
     setReturnBarcode('');
@@ -249,7 +275,9 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
 
   // Process loan extension / renewal
   const handleRenewLoan = (loanId: string, bookTitle: string) => {
-    const result = libraryStore.renewLoan(loanId, renewExtensionDays, 'Pustakawan SBTH');
+    const activeLibrarian = libraryStore.getCurrentLibrarian();
+    const librarianName = activeLibrarian?.name || 'Pustakawan SBTH';
+    const result = libraryStore.renewLoan(loanId, renewExtensionDays, librarianName);
     if (!result.success) {
       alert(`❌ Perpanjangan Gagal: ${result.message}`);
       soundFx.playErrorBeep();
@@ -692,133 +720,376 @@ export const CirculationDesk: React.FC<CirculationDeskProps> = ({
         </div>
       )}
 
-      {/* TAB 2: PENGEMBALIAN KILAT (1-SCAN RETURN) */}
-      {activeTab === 'RETURN' && (
-        <div className="max-w-2xl mx-auto space-y-6">
-          <div className="rounded-2xl bg-surface border border-border p-8 shadow-xs text-center space-y-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500 mx-auto">
-              <RotateCcw className="h-7 w-7" />
-            </div>
+      {/* TAB 2: PENGEMBALIAN BUKU (4 LANGKAH LENGKAP & KILAT) */}
+      {activeTab === 'RETURN' && (() => {
+        const memberActiveLoans = returnSelectedMember
+          ? loans.filter((l) => l.memberId === returnSelectedMember.id && (l.status === 'ACTIVE' || l.status === 'OVERDUE'))
+          : [];
+        const memberBorrowedItems = memberActiveLoans.flatMap((l) =>
+          l.items
+            .filter((it) => !it.returnDate)
+            .map((it) => ({
+              ...it,
+              loanDate: l.loanDate,
+              dueDate: l.dueDate,
+              loanId: l.id,
+            }))
+        );
 
-            <div>
-              <h3 className="text-lg font-bold font-display text-text">
-                Pengembalian Kilat Barcode Buku
-              </h3>
-              <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
-                Arahkan barcode scanner ke buku yang dikembalikan siswa. Sistem otomatis mencari pemilik pinjaman dan mengembalikan stok ke rak.
-              </p>
-            </div>
-
-            <div className="flex gap-2 max-w-md mx-auto">
-              <input
-                type="text"
-                value={returnBarcode}
-                onChange={(e) => setReturnBarcode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleQuickReturn(returnBarcode);
-                  }
-                }}
-                placeholder="Scan / ketik barcode buku (misal: SBTH-B-00101)..."
-                className="flex-1 rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-xs font-mono text-center font-bold text-text outline-hidden focus:ring-1 focus:ring-amber-500"
-              />
-              <button
-                type="button"
-                onClick={() => handleQuickReturn(returnBarcode)}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition"
-              >
-                Kembalikan
-              </button>
-            </div>
-
-            {/* Condition check buttons */}
-            <div className="flex items-center justify-center gap-2 pt-2 text-xs">
-              <span className="text-text-muted">Kondisi saat kembali:</span>
-              <button
-                type="button"
-                onClick={() => setReturnCondition('GOOD')}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                  returnCondition === 'GOOD'
-                    ? 'bg-emerald-500 text-white font-bold'
-                    : 'bg-surface-2 text-text-muted hover:text-text'
-                }`}
-              >
-                Bagus / Mulus
-              </button>
-              <button
-                type="button"
-                onClick={() => setReturnCondition('DAMAGED')}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                  returnCondition === 'DAMAGED'
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-surface-2 text-text-muted hover:text-text'
-                }`}
-              >
-                Robek / Rusak
-              </button>
-            </div>
-          </div>
-
-          {/* 🔔 Alert Banner: Reservation Hold Alert */}
-          {reservedHoldNotice && (
-            <div className="rounded-2xl border-2 border-amber-500 bg-amber-500/15 p-5 shadow-md space-y-3 animate-in zoom-in-95">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5 text-amber-500 font-bold text-sm">
-                  <span className="text-xl">🔔</span>
-                  <span>PERHATIAN: BUKU TELAH DI-RESERVASI (BOOKING)!</span>
+        return (
+          <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
+            {/* Header / Guide */}
+            <div className="rounded-2xl bg-surface border border-border p-6 shadow-xs space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500">
+                  <RotateCcw className="h-6 w-6" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReservedHoldNotice(null)}
-                  className="p-1 text-text-muted hover:text-text rounded-lg hover:bg-surface-2"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="p-3.5 rounded-xl bg-surface border border-amber-500/40 space-y-1 text-xs">
-                <p className="text-text font-bold">
-                  Buku &ldquo;{reservedHoldNotice.bookTitle}&rdquo; telah dipesan oleh:
-                </p>
-                <div className="flex items-center gap-2 text-amber-400 font-bold">
-                  <span>👤 {reservedHoldNotice.reservation.memberName}</span>
-                  <span>({reservedHoldNotice.reservation.memberClass || 'Siswa'})</span>
-                </div>
-                <p className="text-[11px] text-text-muted pt-1">
-                  📦 <strong>Instruksi Pustakawan:</strong> Jangan langsung letakkan di rak umum! Simpan di <em>Rak Reservasi Khusus</em> selama <strong>1x24 Jam</strong> (hingga {reservedHoldNotice.reservation.expiryDate}).
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Success return card */}
-          {lastReturnedInfo && (
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 shadow-xs space-y-3 animate-in fade-in">
-              <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs">
-                <CheckCircle className="h-5 w-5" />
-                <span>Buku Berhasil Dikembalikan! Stok Otomatis Tersedia di Rak.</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface border border-border">
                 <div>
-                  <span className="font-mono text-[11px] text-amber-500 font-bold">
-                    {lastReturnedInfo.item.itemBarcode}
-                  </span>
-                  <h4 className="text-sm font-bold text-text">
-                    {lastReturnedInfo.book?.title}
-                  </h4>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    Peminjam Sebelumnya: <strong className="text-text">{lastReturnedInfo.member?.name || 'Siswa SBTH'}</strong>
+                  <h3 className="text-base font-bold font-display text-text">
+                    Pengembalian Buku Perpustakaan
+                  </h3>
+                  <p className="text-xs text-text-muted">
+                    Ikuti 4 langkah: Pilih Siswa (opsional/otomatis), tentukan kondisi fisik buku, scan barcode, dan cek ringkasan pengembalian.
                   </p>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-500 text-xs font-bold border border-emerald-500/30">
-                  TERSEDIA
-                </span>
               </div>
             </div>
-          )}
-        </div>
-      )}
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              {/* LEFT COLUMN: LANGKAH 1 - PILIH SISWA / ANGGOTA */}
+              <div className="md:col-span-5 space-y-4">
+                <div className="rounded-2xl bg-surface border border-border p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-text flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                        1
+                      </span>
+                      <span>Pilih Siswa / Anggota / Username</span>
+                    </h4>
+                    {returnSelectedMember && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReturnSelectedMember(null);
+                          setReturnMemberSearch('');
+                        }}
+                        className="text-[10px] text-amber-500 hover:underline font-bold"
+                      >
+                        Ganti Siswa
+                      </button>
+                    )}
+                  </div>
+
+                  {returnSelectedMember ? (
+                    <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={returnSelectedMember.name} src={returnSelectedMember.photoUrl} size="md" shape="rounded" />
+                        <div className="min-w-0 flex-1">
+                          <h5 className="font-bold text-xs text-text truncate">{returnSelectedMember.name}</h5>
+                          <p className="text-[11px] text-text-muted truncate">
+                            {returnSelectedMember.username ? `@${returnSelectedMember.username} • ` : ''}
+                            {returnSelectedMember.classGroup}
+                          </p>
+                          <span className="inline-block mt-0.5 font-mono text-[9px] font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                            {returnSelectedMember.memberCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Member's currently borrowed books */}
+                      <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-semibold text-text">Buku Sedang Dipinjam:</span>
+                          <span className="font-bold text-amber-500">{memberBorrowedItems.length} Buku</span>
+                        </div>
+
+                        {memberBorrowedItems.length === 0 ? (
+                          <p className="text-[11px] text-emerald-500 italic bg-emerald-500/10 p-2 rounded-lg text-center">
+                            ✅ Siswa ini tidak memiliki pinjaman aktif saat ini.
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                            {memberBorrowedItems.map((bi) => (
+                              <div
+                                key={bi.id}
+                                className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between gap-2 text-xs"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-text truncate text-[11px]">{bi.bookTitle}</p>
+                                  <span className="font-mono text-[10px] text-amber-500 font-semibold">{bi.itemBarcode}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickReturn(bi.itemBarcode)}
+                                  className="px-2 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] shrink-0 cursor-pointer shadow-xs"
+                                >
+                                  Kembalikan
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-text-muted" />
+                        <input
+                          type="text"
+                          value={returnMemberSearch}
+                          onChange={(e) => setReturnMemberSearch(e.target.value)}
+                          placeholder="Cari nama siswa, @username, atau kode..."
+                          className="w-full rounded-xl border border-border bg-surface-2 pl-9 pr-3 py-1.5 text-xs text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                        {members
+                          .filter((m) => {
+                            if (m.status === 'GRADUATED') return false;
+                            if (!returnMemberSearch.trim()) return true;
+                            const q = returnMemberSearch.toLowerCase();
+                            return (
+                              m.name.toLowerCase().includes(q) ||
+                              (m.username && m.username.toLowerCase().includes(q)) ||
+                              m.memberCode.toLowerCase().includes(q) ||
+                              m.classGroup.toLowerCase().includes(q)
+                            );
+                          })
+                          .slice(0, 8)
+                          .map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setReturnSelectedMember(m);
+                                soundFx.playScanBeep();
+                              }}
+                              className="p-2 rounded-xl border border-border bg-surface-2 hover:border-amber-500/50 hover:bg-surface text-left transition flex items-center justify-between gap-2 cursor-pointer"
+                            >
+                              <div className="min-w-0">
+                                <h5 className="font-bold text-xs text-text truncate">{m.name}</h5>
+                                <p className="text-[10px] text-text-muted truncate">
+                                  {m.username ? `@${m.username} • ` : ''}
+                                  {m.classGroup}
+                                </p>
+                              </div>
+                              <span className="font-mono text-[9px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                {m.memberCode}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                      <p className="text-[10px] text-text-muted italic text-center">
+                        *Tips: Atau bisa langsung scan barcode buku di Langkah 3 (sistem otomatis mengenali siswa).
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: LANGKAH 2 & 3 - KONDISI DAN SCAN */}
+              <div className="md:col-span-7 space-y-4">
+                {/* LANGKAH 2: PILIH KONDISI */}
+                <div className="rounded-2xl bg-surface border border-border p-5 shadow-xs space-y-3">
+                  <h4 className="text-xs font-bold text-text flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                      2
+                    </span>
+                    <span>Pilih Kondisi Fisik Buku Saat Kembali</span>
+                  </h4>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnCondition('GOOD');
+                        soundFx.playScanBeep();
+                      }}
+                      className={`p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 border cursor-pointer ${
+                        returnCondition === 'GOOD'
+                          ? 'bg-emerald-500 text-white border-emerald-400 shadow-sm'
+                          : 'bg-surface-2 text-text-muted border-border hover:text-text'
+                      }`}
+                    >
+                      <span className="text-base">✨</span>
+                      <span>Bagus / Mulus</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnCondition('DAMAGED');
+                        soundFx.playScanBeep();
+                      }}
+                      className={`p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 border cursor-pointer ${
+                        returnCondition === 'DAMAGED'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                          : 'bg-surface-2 text-text-muted border-border hover:text-text'
+                      }`}
+                    >
+                      <span className="text-base">⚠️</span>
+                      <span>Robek / Rusak</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnCondition('LOST');
+                        soundFx.playScanBeep();
+                      }}
+                      className={`p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 border cursor-pointer ${
+                        returnCondition === 'LOST'
+                          ? 'bg-rose-500 text-white border-rose-400 shadow-sm'
+                          : 'bg-surface-2 text-text-muted border-border hover:text-text'
+                      }`}
+                    >
+                      <span className="text-base">❌</span>
+                      <span>Hilang</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* LANGKAH 3: SCAN & KEMBALIKAN */}
+                <div className="rounded-2xl bg-surface border border-border p-5 shadow-xs space-y-3">
+                  <h4 className="text-xs font-bold text-text flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                      3
+                    </span>
+                    <span>Scan Barcode & Klik Kembalikan</span>
+                  </h4>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Barcode className="absolute left-3.5 top-3 h-4 w-4 text-text-muted animate-pulse" />
+                      <input
+                        type="text"
+                        value={returnBarcode}
+                        onChange={(e) => setReturnBarcode(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleQuickReturn(returnBarcode);
+                          }
+                        }}
+                        placeholder="Scan atau ketik barcode buku (misal: SBTH-B-00101)..."
+                        className="w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 py-2.5 text-xs font-mono font-bold text-text placeholder-text-muted focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickReturn(returnBarcode)}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-md transition cursor-pointer shrink-0"
+                    >
+                      Kembalikan Buku
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 🔔 Alert Banner: Reservation Hold Alert */}
+            {reservedHoldNotice && (
+              <div className="rounded-2xl border-2 border-amber-500 bg-amber-500/15 p-5 shadow-md space-y-3 animate-in zoom-in-95">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 text-amber-500 font-bold text-sm">
+                    <span className="text-xl">🔔</span>
+                    <span>PERHATIAN: BUKU TELAH DI-RESERVASI (BOOKING)!</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReservedHoldNotice(null)}
+                    className="p-1 text-text-muted hover:text-text rounded-lg hover:bg-surface-2 cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-3.5 rounded-xl bg-surface border border-amber-500/40 space-y-1 text-xs">
+                  <p className="text-text font-bold">
+                    Buku &ldquo;{reservedHoldNotice.bookTitle}&rdquo; telah dipesan oleh:
+                  </p>
+                  <div className="flex items-center gap-2 text-amber-400 font-bold">
+                    <span>👤 {reservedHoldNotice.reservation.memberName}</span>
+                    <span>({reservedHoldNotice.reservation.memberClass || 'Siswa'})</span>
+                  </div>
+                  <p className="text-[11px] text-text-muted pt-1">
+                    📦 <strong>Instruksi Pustakawan:</strong> Jangan langsung letakkan di rak umum! Simpan di <em>Rak Reservasi Khusus</em> selama <strong>1x24 Jam</strong> (hingga {reservedHoldNotice.reservation.expiryDate}).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* LANGKAH 4: OUTPUT RINGKASAN PENGEMBALIAN LENGKAP */}
+            {lastReturnedInfo && (
+              <div className="rounded-2xl border-2 border-emerald-500/50 bg-emerald-500/10 p-5 shadow-md space-y-4 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs">
+                    <CheckCircle className="h-5 w-5" />
+                    <span>Langkah 4: Buku Berhasil Dikembalikan! Stok Otomatis Tersedia di Rak.</span>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-500 text-slate-950 text-xs font-extrabold shadow-xs">
+                    ✓ TERSEDIA DI RAK
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-surface border border-border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Info Peminjam */}
+                  <div className="space-y-1.5 border-b md:border-b-0 md:border-r border-border pb-3 md:pb-0 md:pr-4">
+                    <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">
+                      Data Peminjam / Siswa:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-text">
+                        {lastReturnedInfo.member?.name || 'Siswa SBTH'}
+                      </span>
+                      {lastReturnedInfo.member?.username && (
+                        <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-400 font-bold text-[10px]">
+                          @{lastReturnedInfo.member.username}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-text-muted">
+                      Kelas: <strong className="text-text">{lastReturnedInfo.member?.classGroup || '-'}</strong> • Kode: <span className="font-mono">{lastReturnedInfo.member?.memberCode || '-'}</span>
+                    </p>
+                  </div>
+
+                  {/* Info Buku & Tanggal */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">
+                      Detail Buku & Transaksi:
+                    </span>
+                    <h5 className="font-bold text-xs text-text line-clamp-1">
+                      {lastReturnedInfo.book?.title}
+                    </h5>
+                    <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                      <span className="text-amber-500 font-bold">
+                        {lastReturnedInfo.item.itemBarcode}
+                      </span>
+                      {lastReturnedInfo.book?.shelfLocation && (
+                        <span className="text-text-muted font-sans text-[10px]">
+                          📍 {lastReturnedInfo.book.shelfLocation}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div className="p-1.5 rounded-lg bg-surface-2 border border-border">
+                        <span className="text-text-muted block text-[9px]">📅 Tanggal Pinjam:</span>
+                        <strong className="text-text">{lastReturnedInfo.loanDate}</strong>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-surface-2 border border-border">
+                        <span className="text-text-muted block text-[9px]">📅 Tanggal Kembali:</span>
+                        <strong className="text-emerald-500">{lastReturnedInfo.returnDate}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* TAB: PERPANJANGAN PINJAMAN (RENEWAL WORKFLOW) */}
       {activeTab === 'RENEW' && (

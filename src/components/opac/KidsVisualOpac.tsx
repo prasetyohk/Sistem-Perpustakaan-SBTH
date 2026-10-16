@@ -45,6 +45,7 @@ import { generateSlimsCallNumber } from '@/lib/constants';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
 
 interface KidsVisualOpacProps {
+  language?: Language;
   onSelectBookForLoan?: (book: Book) => void;
   onOpenScanIsbn?: () => void;
   isKioskMode?: boolean;
@@ -53,6 +54,7 @@ interface KidsVisualOpacProps {
 }
 
 export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
+  language,
   onSelectBookForLoan,
   onOpenScanIsbn,
   isKioskMode = false,
@@ -60,8 +62,9 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
   onOpenStudentPortal,
 }) => {
   const [mounted, setMounted] = useState<boolean>(false);
-  const [lang, setLang] = useState<Language>('id');
-  const t = DICTIONARY[mounted ? lang : 'id'] || DICTIONARY.id;
+  const [lang, setLang] = useState<Language>(language || 'id');
+  const activeLang = language || lang;
+  const t = DICTIONARY[mounted ? activeLang : 'id'] || DICTIONARY.id;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'ALL'>('ALL');
@@ -181,13 +184,19 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
 
   useEffect(() => {
     setMounted(true);
-    setLang(libraryStore.getLanguage());
+    setLang(language || libraryStore.getLanguage());
     setCategories(libraryStore.getCategories());
     setWishlist(libraryStore.getWishlist());
     setSchoolProfile(libraryStore.getSchoolProfile());
     setWishlistNotifs(libraryStore.getWishlistNotifications());
     setLibraryNews(libraryStore.getLibraryNews());
-  }, []);
+    if (typeof window !== 'undefined') {
+      const savedView = localStorage.getItem('sbth_opac_view_mode') as 'GRID' | 'LIST';
+      if (savedView === 'GRID' || savedView === 'LIST') {
+        setViewMode(savedView);
+      }
+    }
+  }, [language]);
 
   // Auto-minimize highlights when searching or selecting quick search tags
   useEffect(() => {
@@ -1209,6 +1218,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                 type="button"
                 onClick={() => {
                   setViewMode('GRID');
+                  if (typeof window !== 'undefined') localStorage.setItem('sbth_opac_view_mode', 'GRID');
                   soundFx.playScanBeep();
                 }}
                 className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition ${
@@ -1225,6 +1235,7 @@ export const KidsVisualOpac: React.FC<KidsVisualOpacProps> = ({
                 type="button"
                 onClick={() => {
                   setViewMode('LIST');
+                  if (typeof window !== 'undefined') localStorage.setItem('sbth_opac_view_mode', 'LIST');
                   setIsHighlightsMinimized(true);
                   soundFx.playScanBeep();
                 }}

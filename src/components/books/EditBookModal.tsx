@@ -22,7 +22,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Book, BookItem, CategoryId, AcquisitionSource, AgeGroup, BookStatus } from '@/types';
-import { CATEGORIES } from '@/lib/constants';
+import { CATEGORIES, PHYSICAL_FORMAT_OPTIONS } from '@/lib/constants';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
@@ -50,6 +50,12 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   );
   const [bookLanguage, setBookLanguage] = useState<string>(book.bookLanguage || 'id');
   const [physicalFormat, setPhysicalFormat] = useState<string>(book.physicalFormat || 'Cerita Bergambar');
+
+  // Safe Deletion state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('Salah input data');
+  const [deletePin, setDeletePin] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [categoryId, setCategoryId] = useState<CategoryId>(book.categoryId);
   const [ageGroup, setAgeGroup] = useState<AgeGroup>(book.ageGroup || 'TK_A');
   const [synopsis, setSynopsis] = useState(book.synopsis || '');
@@ -65,6 +71,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   // Cover image states
   const [coverImage, setCoverImage] = useState(book.coverImage || '');
   const [isCompressing, setIsCompressing] = useState(false);
+  const [isSearchingCover, setIsSearchingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active section tab: 'INFO' | 'COVER' | 'COPIES'
@@ -75,6 +82,37 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   const [isAddingCopy, setIsAddingCopy] = useState(false);
   const [newCopyShelf, setNewCopyShelf] = useState(book.shelfLocation || 'Rak A - Baris 1');
   const [newCopyPrice, setNewCopyPrice] = useState(priceValue);
+
+  const handleAutoFetchCover = async () => {
+    const cleanIsbn = (book.isbn || '').replace(/[-\s]/g, '').trim();
+    const hasValidIsbn = /^\d{10,13}$/.test(cleanIsbn);
+    const q = (hasValidIsbn ? cleanIsbn : title).trim();
+    if (!q && !cleanIsbn) {
+      alert('Ketik judul atau ISBN terlebih dahulu.');
+      return;
+    }
+    setIsSearchingCover(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('coverQuery', q || cleanIsbn);
+      if (cleanIsbn) params.set('isbn', cleanIsbn);
+      if (title) params.set('title', title);
+      const res = await fetch(`/api/isbn-lookup?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.cover) {
+          setCoverImage(json.cover);
+          soundFx.playSuccessChime();
+        } else {
+          alert('Tidak ditemukan gambar sampul di Google Books.');
+        }
+      }
+    } catch {
+      alert('Gagal mencari gambar sampul. Periksa koneksi internet.');
+    } finally {
+      setIsSearchingCover(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -202,6 +240,35 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
       setItems(libraryStore.getItemsForBook(book.id));
       alert(`Eksemplar [${item.itemBarcode}] berhasil diganti dengan buku baru dan kini berstatus TERSEDIA.`);
     }
+  };
+
+  // Safe Deletion Handler for Wrong Input
+  const handleDeleteBook = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError('');
+    const cleanPin = deletePin.trim();
+    if (cleanPin !== 'sbth2026' && cleanPin !== '1234') {
+      const isLibrarian = libraryStore.getLibrarians().some((l) => l.pin === cleanPin);
+      if (!isLibrarian) {
+        setDeleteError('PIN otorisasi Pustakawan/Admin belum sesuai. Coba 1234 atau sbth2026.');
+        soundFx.playErrorBeep();
+        return;
+      }
+    }
+
+    const currentLib = libraryStore.getCurrentLibrarian();
+    const res = libraryStore.deleteBook(book.id, deleteReason || 'Salah input judul/ISBN', currentLib?.name);
+    if (!res.success) {
+      setDeleteError(res.message || 'Gagal menghapus buku.');
+      soundFx.playErrorBeep();
+      return;
+    }
+
+    soundFx.playSuccessChime();
+    alert(`✓ Buku "${book.title}" berhasil dihapus dari sistem.`);
+    setIsDeleteModalOpen(false);
+    onSaved();
+    onClose();
   };
 
   // Add 1 New Copy directly from this modal
@@ -383,12 +450,11 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
                     onChange={(e) => setPhysicalFormat(e.target.value)}
                     className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2 text-xs text-text focus:border-amber-500 outline-hidden"
                   >
-                    <option value="Cerita Bergambar">📘 Cerita Bergambar</option>
-                    <option value="Boardbook">📗 Boardbook (Karton Tebal)</option>
-                    <option value="Hardcover">📕 Hardcover</option>
-                    <option value="Pop-Up / 3D">✨ Pop-Up / 3D</option>
-                    <option value="Buku Aktivitas">📝 Buku Aktivitas</option>
-                    <option value="Flip-Flap">📖 Flip-Flap</option>
+                    {PHYSICAL_FORMAT_OPTIONS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.icon} {f.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -547,10 +613,21 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
                       type="button"
                       disabled={isCompressing}
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition active:scale-95"
+                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                     >
                       <Upload className="h-3.5 w-3.5" />
                       <span>{isCompressing ? 'Mengompres...' : 'Upload dari HP / Kamera'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSearchingCover}
+                      onClick={handleAutoFetchCover}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                      title="Cari otomatis gambar sampul buku dari Google Books"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>{isSearchingCover ? 'Mencari Google...' : 'Auto Cari Sampul Google'}</span>
                     </button>
 
                     <button
@@ -767,25 +844,117 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
         </div>
 
         {/* Modal Sticky Footer */}
-        <div className="p-4 border-t border-border bg-surface flex items-center justify-between gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-text-muted hover:text-text hover:bg-surface-2 transition"
-          >
-            Batal
-          </button>
+        <div className="p-4 border-t border-border bg-surface flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-text-muted hover:text-text hover:bg-surface-2 transition"
+            >
+              Tutup
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError('');
+                setDeletePin('');
+                setIsDeleteModalOpen(true);
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/25 flex items-center gap-1.5 transition cursor-pointer"
+              title="Batalkan atau hapus buku jika salah input judul / salah scan ISBN"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Hapus Buku (Salah Input)</span>
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={handleSaveBook}
-            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-xs transition"
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-xs transition cursor-pointer"
           >
             <Save className="h-4 w-4" />
             <span>Simpan Perubahan Buku</span>
           </button>
         </div>
       </div>
+
+      {/* MODAL DIALOG AMAN: HAPUS BUKU KARENA SALAH INPUT */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-3xl bg-surface border border-rose-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <div className="h-10 w-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-500">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-text">Hapus Buku (Salah Input)</h3>
+                <p className="text-[11px] text-text-muted">Proses ini akan menghapus buku & seluruh eksemplarnya</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleDeleteBook} className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-surface-2 border border-border">
+                <span className="text-[11px] text-text-muted block">Buku yang akan dihapus:</span>
+                <p className="font-bold text-text mt-0.5">{book.title}</p>
+                <span className="font-mono text-[10px] text-text-muted">ISBN: {book.isbn} • {items.length} Eksemplar</span>
+              </div>
+
+              <div>
+                <label className="font-semibold text-text block mb-1">Alasan Penghapusan / Pembatalan:</label>
+                <select
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text outline-hidden"
+                >
+                  <option value="Salah input judul / salah scan ISBN">Salah input judul / salah scan ISBN</option>
+                  <option value="Duplikasi entri katalog buku">Duplikasi entri katalog buku</option>
+                  <option value="Buku dibatalkan oleh pihak sekolah">Buku dibatalkan oleh pihak sekolah</option>
+                  <option value="Input percobaan / demo data">Input percobaan / demo data</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-text block mb-1">
+                  Masukkan PIN Admin / Pustakawan: <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Ketik PIN (contoh: 1234 atau sbth2026)"
+                  value={deletePin}
+                  onChange={(e) => setDeletePin(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs font-mono text-text outline-hidden focus:ring-1 focus:ring-rose-500"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[11px] font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-text-muted hover:bg-surface-2 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-600/30 transition cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Konfirmasi Hapus Permanen</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

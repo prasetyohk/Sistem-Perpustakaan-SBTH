@@ -16,9 +16,10 @@ import {
   Heart,
   Loader2,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react';
 import { Book, BookItem, CategoryId, AgeGroup, AcquisitionSource, Category } from '@/types';
-import { CATEGORIES } from '@/lib/constants';
+import { CATEGORIES, PHYSICAL_FORMAT_OPTIONS } from '@/lib/constants';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
@@ -41,13 +42,14 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
   const [isbnInput, setIsbnInput] = useState<string>('');
   const [searchTitleInput, setSearchTitleInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [lookupNotice, setLookupNotice] = useState<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
   // Existing book detected state
   const [existingBook, setExistingBook] = useState<Book | null>(null);
   const [existingItems, setExistingItems] = useState<BookItem[]>([]);
-  const [quickAddCount, setQuickAddCount] = useState<number>(3);
+  const [quickAddCount, setQuickAddCount] = useState<number>(1);
 
   // New book form state
   const [title, setTitle] = useState<string>('');
@@ -61,7 +63,8 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
   const [ageGroup, setAgeGroup] = useState<AgeGroup>('TK_A');
   const [synopsis, setSynopsis] = useState<string>('');
   const [coverImage, setCoverImage] = useState<string>('');
-  const [copiesCount, setCopiesCount] = useState<number>(3);
+  const [isSearchingCover, setIsSearchingCover] = useState<boolean>(false);
+  const [copiesCount, setCopiesCount] = useState<number>(1);
   const [source, setSource] = useState<AcquisitionSource>('BELI_SEKOLAH');
   const [donorName, setDonorName] = useState<string>('');
   const [priceValue, setPriceValue] = useState<number>(45000);
@@ -100,7 +103,7 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
     setAgeGroup('TK_A');
     setSynopsis('');
     setCoverImage('');
-    setCopiesCount(3);
+    setCopiesCount(1);
     setSource('BELI_SEKOLAH');
     setCreatedSummary(null);
     setSearchSuggestions([]);
@@ -110,10 +113,17 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
   // Waterfall Lookup: Local DB -> /api/isbn-lookup (Verified Cache, OpenLibrary, Heuristics, Google Books)
   const handleLookupIsbn = async (isbnToLookup: string) => {
     const cleanIsbn = isbnToLookup.replace(/[-\s]/g, '').trim();
-    if (!cleanIsbn) return;
+    if (!cleanIsbn) {
+      setLookupNotice({
+        type: 'warning',
+        message: 'Silakan masukkan nomor barcode ISBN (10 atau 13 digit) terlebih dahulu.',
+      });
+      return;
+    }
 
     setIsLoading(true);
     setExistingBook(null);
+    setLookupNotice(null);
 
     // 1. Cek Database Lokal Perpustakaan SBTH
     const localBook = libraryStore.findBookByIsbn(cleanIsbn);
@@ -122,13 +132,24 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
       setExistingBook(localBook);
       setExistingItems(items);
       setIsLoading(false);
+      setLookupNotice({
+        type: 'success',
+        message: `Buku "${localBook.title}" sudah terdaftar di koleksi SBTH (${items.length} eksemplar). Anda dapat menambah salinan langsung di bawah.`,
+      });
       soundFx.playScanBeep();
       return;
     }
 
-    // 2. Fetch ke Server Route /api/isbn-lookup (Bypass Client Quota & Network Issues)
+    // 2. Fetch ke Server Route /api/isbn-lookup (Bypass Client Quota & Network Issues) dengan Timeout 5 detik
     try {
-      const res = await fetch(`/api/isbn-lookup?isbn=${encodeURIComponent(cleanIsbn)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5500);
+
+      const res = await fetch(`/api/isbn-lookup?isbn=${encodeURIComponent(cleanIsbn)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -143,13 +164,44 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
             bookLanguage: json.data.bookLanguage,
             physicalFormat: json.data.physicalFormat,
           });
+
+          // Kasus 1: Ditemukan Judul Lengkap
+          if (json.data.title) {
+            setLookupNotice({
+              type: 'success',
+              message: `✅ Berhasil Ditemukan: "${json.data.title}" (${json.data.source || 'Online'}). Rincian buku telah terisi otomatis!`,
+            });
+            // Auto-fetch Google Books cover if cover was empty
+            if (!json.data.cover) {
+              handleAutoFetchCover(cleanIsbn || json.data.title);
+            }
+          } 
+          // Kasus 2: Ditemukan Prefix Penerbit (misal Gramedia/National Geographic) tapi judul spesifik belum terindeks
+          else if (json.data.publisher && json.data.publisher !== 'Penerbit Buku Anak') {
+            setLookupNotice({
+              type: 'warning',
+              message: `ℹ️ Prefix ISBN terdaftar atas nama "${json.data.publisher}". Judul spesifik belum terindeks online, silakan lengkapi Judul & Pengarang di formulir bawah.`,
+            });
+          }
+          // Kasus 3: ISBN belum terdaftar di database online
+          else {
+            setLookupNotice({
+              type: 'info',
+              message: `⚠️ ISBN ${cleanIsbn} belum terdaftar di database publik online. Jangan khawatir, silakan langsung ketik judul buku di formulir bawah untuk menyimpannya.`,
+            });
+          }
+
           setIsLoading(false);
           soundFx.playScanBeep();
           return;
         }
       }
-    } catch (e) {
-      console.warn('ISBN lookup route error:', e);
+    } catch (e: any) {
+      console.warn('ISBN lookup route error / timeout:', e);
+      setLookupNotice({
+        type: 'info',
+        message: `⚠️ Pencarian online ISBN ${cleanIsbn} tidak merespons (timeout). Anda dapat langsung mengetik judul dan pengarang di formulir bawah.`,
+      });
     }
 
     // Selesai (Jika belum ada judul, tetap isi dengan default penerbit / biarkan pustakawan isi)
@@ -179,8 +231,10 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
     if (meta.physicalFormat) setPhysicalFormat(meta.physicalFormat);
 
     // Auto-detect category suggestion based on title keywords
-    const lower = (meta.title + ' ' + meta.synopsis).toLowerCase();
-    if (lower.includes('hewan') || lower.includes('alam') || lower.includes('binatang') || lower.includes('dinosaurus') || lower.includes('tumbuhan')) {
+    const lower = (meta.title + ' ' + (meta.synopsis || '')).toLowerCase();
+    if (lower.includes('ensiklopedia') || lower.includes('almanac') || lower.includes('1.111') || lower.includes('hiupedia') || lower.includes('antariksa') || lower.includes('sejarah')) {
+      setCategoryId('cat-ensiklopedia');
+    } else if (lower.includes('hewan') || lower.includes('alam') || lower.includes('binatang') || lower.includes('dinosaurus') || lower.includes('tumbuhan') || lower.includes('geographic') || lower.includes('sains') || lower.includes('science') || lower.includes('survival') || lower.includes('fauna')) {
       setCategoryId('cat-alam');
     } else if (lower.includes('dongeng') || lower.includes('cerita') || lower.includes('fabel') || lower.includes('kancil') || lower.includes('putri')) {
       setCategoryId('cat-dongeng');
@@ -188,48 +242,176 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
       setCategoryId('cat-aktivitas');
     } else if (lower.includes('jujur') || lower.includes('doa') || lower.includes('adab') || lower.includes('hebat') || lower.includes('karakter') || lower.includes('sopan')) {
       setCategoryId('cat-karakter');
-    } else if (lower.includes('ensiklopedia') || lower.includes('sains') || lower.includes('antariksa') || lower.includes('bumi') || lower.includes('kuno') || lower.includes('sejarah')) {
-      setCategoryId('cat-ensiklopedia');
+    } else if (meta.bookLanguage === 'en' || lower.includes('english') || lower.includes('mandarin') || lower.includes('bilingual')) {
+      setCategoryId('cat-bahasa');
     }
   };
 
-  // Smart Search by Title/Author (for Indonesian books without ISBN)
+  // Smart Search by Title/Author (menggabungkan katalog lokal SBTH + lookup online)
   const handleSearchByTitle = async () => {
-    if (!searchTitleInput.trim()) return;
+    const q = searchTitleInput.trim();
+    if (!q) return;
     setIsLoading(true);
+    setLookupNotice(null);
+    // Reset existingBook sebelumnya agar hasil pencarian baru menggantikan tampilan bawah secara dinamis
+    setExistingBook(null);
+    setExistingItems([]);
+
+    // 1. Cek buku di database lokal SBTH
+    const qLower = q.toLowerCase();
+    const localMatches = libraryStore.getBooks().filter(
+      (b) =>
+        b.title.toLowerCase().includes(qLower) ||
+        b.author.toLowerCase().includes(qLower) ||
+        (b.isbn && b.isbn.replace(/[-\s]/g, '').includes(q.replace(/[-\s]/g, '')))
+    );
+
+    const localSuggestions = localMatches.map((b) => ({
+      ...b,
+      isLocal: true,
+      source: 'Katalog Perpustakaan SBTH',
+      cover: b.coverImage,
+    }));
+
     try {
-      const res = await fetch(`/api/isbn-lookup?title=${encodeURIComponent(searchTitleInput.trim())}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5500);
+      const res = await fetch(`/api/isbn-lookup?title=${encodeURIComponent(q)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      let onlineItems: any[] = [];
       if (res.ok) {
         const json = await res.json();
-        if (json.success && json.items) {
-          setSearchSuggestions(json.items);
-        } else {
-          setSearchSuggestions([]);
+        if (json.success && json.items && json.items.length > 0) {
+          // Filter buku online yang sudah ada di lokal agar tidak duplikat
+          onlineItems = json.items.filter(
+            (oi: any) =>
+              !localSuggestions.some(
+                (li) => li.title.trim().toLowerCase() === (oi.title || '').trim().toLowerCase()
+              )
+          );
         }
+      }
+
+      const combined = [...localSuggestions, ...onlineItems];
+      if (combined.length > 0) {
+        setSearchSuggestions(combined);
+        setLookupNotice({
+          type: 'success',
+          message: `Ditemukan ${combined.length} buku untuk "${q}" (${localSuggestions.length} di lokal SBTH, ${onlineItems.length} online). Klik salah satu buku di bawah untuk membuka data autofill.`,
+        });
       } else {
         setSearchSuggestions([]);
+        setLookupNotice({
+          type: 'info',
+          message: `Tidak ditemukan buku dengan judul "${q}". Silakan isi formulir di bawah secara manual.`,
+        });
       }
     } catch {
-      setSearchSuggestions([]);
+      if (localSuggestions.length > 0) {
+        setSearchSuggestions(localSuggestions);
+        setLookupNotice({
+          type: 'success',
+          message: `Ditemukan ${localSuggestions.length} buku di katalog lokal SBTH untuk "${q}". Klik untuk melihat detail.`,
+        });
+      } else {
+        setSearchSuggestions([]);
+        setLookupNotice({
+          type: 'info',
+          message: `Koneksi pencarian online tidak merespons. Anda dapat mengetik judul di formulir bawah secara manual.`,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSelectSuggestion = (item: any) => {
-    applyBookMetadata({
-      title: item.title || '',
-      author: item.author || '',
-      publisher: item.publisher || '',
-      year: item.year || '2024',
-      synopsis: item.synopsis || '',
-      cover: item.cover || '',
-      pageCount: item.pageCount,
-      bookLanguage: item.bookLanguage,
-      physicalFormat: item.physicalFormat,
-    });
+    const cleanIsbn = (item.isbn || '').replace(/[-\s]/g, '').trim();
+
+    // 1. Cek apakah buku ini sudah terdaftar di database lokal SBTH
+    let localBook: Book | undefined = undefined;
+    if (item.isLocal && item.id) {
+      localBook = libraryStore.getBooks().find((b) => b.id === item.id);
+    } else if (cleanIsbn) {
+      localBook = libraryStore.findBookByIsbn(cleanIsbn);
+    } else if (item.title) {
+      localBook = libraryStore.getBooks().find(
+        (b) => b.title.trim().toLowerCase() === item.title.trim().toLowerCase()
+      );
+    }
+
+    if (localBook) {
+      // BUKU SUDAH TERDAFTAR DI SBTH -> Ganti tampilan bawah ke buku ini
+      const items = libraryStore.getItemsForBook(localBook.id);
+      setExistingBook(localBook);
+      setExistingItems(items);
+      setIsbnInput(localBook.isbn || '');
+      setLookupNotice({
+        type: 'success',
+        message: `Buku "${localBook.title}" sudah terdaftar di koleksi SBTH (${items.length} eksemplar). Anda dapat menambah salinan langsung di bawah.`,
+      });
+      soundFx.playScanBeep();
+    } else {
+      // BUKU BARU -> Bersihkan existingBook dan isi formulir autofill lengkap!
+      setExistingBook(null);
+      setExistingItems([]);
+      if (cleanIsbn) {
+        setIsbnInput(cleanIsbn);
+      }
+      applyBookMetadata({
+        title: item.title || '',
+        author: item.author || '',
+        publisher: item.publisher || '',
+        year: item.year || '2024',
+        synopsis: item.synopsis || '',
+        cover: item.cover || '',
+        pageCount: item.pageCount,
+        bookLanguage: item.bookLanguage,
+        physicalFormat: item.physicalFormat,
+      });
+      setLookupNotice({
+        type: 'success',
+        message: `✅ Data buku "${item.title}" berhasil di-autofill! Silakan periksa atau simpan di bawah.`,
+      });
+      soundFx.playSuccessChime();
+    }
 
     setSearchSuggestions([]);
+  };
+
+  const handleAutoFetchCover = async (forcedQuery?: string) => {
+    const cleanIsbn = isbnInput.replace(/[-\s]/g, '').trim();
+    const hasValidIsbn = /^\d{10,13}$/.test(cleanIsbn);
+    // Prioritize ISBN when valid, otherwise title/search input
+    const q = (forcedQuery || (hasValidIsbn ? cleanIsbn : (title || searchTitleInput))).trim();
+    if (!q && !cleanIsbn) {
+      alert('Ketik judul buku atau scan ISBN terlebih dahulu untuk mencari gambar.');
+      return;
+    }
+    setIsSearchingCover(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('coverQuery', q || cleanIsbn);
+      if (cleanIsbn) params.set('isbn', cleanIsbn);
+      if (title) params.set('title', title);
+      const res = await fetch(`/api/isbn-lookup?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.cover) {
+          setCoverImage(json.cover);
+          soundFx.playSuccessChime();
+        } else if (!forcedQuery) {
+          alert('Tidak ditemukan gambar sampul di Google Books. Anda dapat menggunakan sampul resmi bawaan.');
+        }
+      }
+    } catch {
+      if (!forcedQuery) alert('Gagal mencari gambar sampul. Periksa koneksi internet.');
+    } finally {
+      setIsSearchingCover(false);
+    }
   };
 
   // Submit quick copies for existing book
@@ -334,7 +516,14 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                   <input
                     type="text"
                     value={isbnInput}
-                    onChange={(e) => setIsbnInput(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setIsbnInput(val);
+                      if (existingBook && val.trim().replace(/[-\s]/g, '') !== existingBook.isbn.replace(/[-\s]/g, '')) {
+                        setExistingBook(null);
+                        setExistingItems([]);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -354,12 +543,43 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                   type="button"
                   onClick={() => handleLookupIsbn(isbnInput)}
                   disabled={isLoading || !isbnInput.trim()}
-                  className="rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 flex items-center gap-1.5 transition shadow-sm"
+                  className="rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 flex items-center gap-1.5 transition shadow-sm cursor-pointer"
                 >
                   <Sparkles className="h-4 w-4" />
                   Auto-Fill
                 </button>
               </div>
+
+              {/* Status Notice / Feedback Banner */}
+              {lookupNotice && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start justify-between gap-2 border animate-in fade-in ${
+                    lookupNotice.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800'
+                      : lookupNotice.type === 'warning'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800'
+                      : 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {lookupNotice.type === 'success' ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    ) : lookupNotice.type === 'warning' ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    )}
+                    <span className="leading-relaxed font-medium">{lookupNotice.message}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLookupNotice(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Alternative Title Autocomplete Fallback */}
               <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
@@ -370,7 +590,13 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                   <input
                     type="text"
                     value={searchTitleInput}
-                    onChange={(e) => setSearchTitleInput(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTitleInput(e.target.value);
+                      if (existingBook) {
+                        setExistingBook(null);
+                        setExistingItems([]);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -393,34 +619,58 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                 {/* Suggestions List */}
                 {searchSuggestions.length > 0 && (
                   <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md max-h-48 overflow-y-auto">
-                    {searchSuggestions.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(item)}
-                        className="w-full text-left p-2.5 hover:bg-amber-50/60 dark:hover:bg-slate-800/80 flex items-center gap-3 transition"
-                      >
-                        {item.volumeInfo.imageLinks?.thumbnail ? (
-                          <img
-                            src={item.volumeInfo.imageLinks.thumbnail.replace('http:', 'https:')}
-                            alt=""
-                            className="h-10 w-8 object-cover rounded shadow-xs"
-                          />
-                        ) : (
-                          <div className="h-10 w-8 rounded bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[9px] text-slate-400">
-                            No Cover
+                    {searchSuggestions.map((item, idx) => {
+                      const coverImg =
+                        item.cover ||
+                        item.volumeInfo?.imageLinks?.thumbnail?.replace('http:', 'https:') ||
+                        item.volumeInfo?.imageLinks?.smallThumbnail?.replace('http:', 'https:');
+                      const titleStr = item.title || item.volumeInfo?.title || 'Judul Buku';
+                      const authorStr =
+                        item.author ||
+                        (Array.isArray(item.volumeInfo?.authors) ? item.volumeInfo.authors.join(', ') : item.volumeInfo?.authors) ||
+                        'Penulis tidak diketahui';
+                      const publisherStr = item.publisher || item.volumeInfo?.publisher || '';
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectSuggestion(item)}
+                          className="w-full text-left p-2.5 hover:bg-amber-50/60 dark:hover:bg-slate-800/80 flex items-center gap-3 transition cursor-pointer border-b last:border-b-0 border-slate-100 dark:border-slate-800"
+                        >
+                          {coverImg ? (
+                            <img
+                              src={coverImg}
+                              alt=""
+                              className="h-10 w-8 object-cover rounded shadow-xs"
+                            />
+                          ) : (
+                            <div className="h-10 w-8 rounded bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[9px] text-slate-400">
+                              No Cover
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                {titleStr}
+                              </p>
+                              {item.isLocal ? (
+                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-700 shrink-0">
+                                  Sudah di SBTH
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800 shrink-0">
+                                  Buku Baru
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate">
+                              {authorStr} {publisherStr ? `• ${publisherStr}` : ''}
+                            </p>
                           </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                            {item.volumeInfo.title}
-                          </p>
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {item.volumeInfo.authors?.join(', ') || 'Penulis tidak diketahui'} • {item.volumeInfo.publisher || ''}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -437,11 +687,29 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                   className="h-24 w-18 object-cover rounded-xl shadow-md border border-emerald-200"
                 />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-0.5 rounded-full">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Buku Sudah Terdaftar di Perpustakaan SBTH
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExistingBook(null);
+                        setExistingItems([]);
+                        setIsbnInput('');
+                        setSearchTitleInput('');
+                        setLookupNotice({
+                          type: 'info',
+                          message: 'Pilihan dibersihkan. Anda sekarang dapat mengisi formulir buku baru di bawah.',
+                        });
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-slate-300 dark:border-slate-700 flex items-center gap-1 transition cursor-pointer"
+                      title="Bersihkan pilihan buku ini dan buka formulir input buku baru"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Ganti / Input Buku Baru
+                    </button>
                   </div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-1">
                     {existingBook.title}
@@ -494,13 +762,34 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                       aspectRatio="h-full w-full"
                     />
                   </div>
-                  <input
-                    type="text"
-                    value={coverImage}
-                    onChange={(e) => setCoverImage(e.target.value)}
-                    placeholder="URL Foto Sampul (Opsional)"
-                    className="w-full text-[11px] rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 bg-slate-50 dark:bg-slate-800"
-                  />
+                  <div className="w-full space-y-1.5">
+                    <input
+                      type="text"
+                      value={coverImage}
+                      onChange={(e) => setCoverImage(e.target.value)}
+                      placeholder="URL Foto Sampul (Opsional)"
+                      className="w-full text-[11px] rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 bg-slate-50 dark:bg-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAutoFetchCover()}
+                      disabled={isSearchingCover}
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
+                      title="Cari gambar sampul resmi dari Google Books berdasarkan judul / ISBN"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>{isSearchingCover ? 'Mencari Google...' : 'Auto Cari Sampul Google'}</span>
+                    </button>
+                    {coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => setCoverImage('')}
+                        className="w-full text-[10px] text-rose-500 hover:underline cursor-pointer text-center"
+                      >
+                        Reset ke Sampul Warna Kategori
+                      </button>
+                    )}
+                  </div>
                   <p className="text-[10px] text-slate-500 text-center leading-tight">
                     Otomatis dibuatkan sampul buku indah sesuai warna rak jika kosong.
                   </p>
@@ -593,19 +882,18 @@ export const ScanIsbnModal: React.FC<ScanIsbnModalProps> = ({
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                        Format Fisik
+                        Format Fisik Buku
                       </label>
                       <select
                         value={physicalFormat}
                         onChange={(e) => setPhysicalFormat(e.target.value)}
                         className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs outline-hidden"
                       >
-                        <option value="Cerita Bergambar">📘 Cerita Bergambar</option>
-                        <option value="Boardbook">📗 Boardbook (Karton)</option>
-                        <option value="Hardcover">📕 Hardcover</option>
-                        <option value="Pop-Up / 3D">✨ Pop-Up / 3D</option>
-                        <option value="Buku Aktivitas">📝 Buku Aktivitas</option>
-                        <option value="Flip-Flap">📖 Flip-Flap</option>
+                        {PHYSICAL_FORMAT_OPTIONS.map((fmt) => (
+                          <option key={fmt.value} value={fmt.value}>
+                            {fmt.icon} {fmt.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

@@ -29,30 +29,262 @@ import {
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
-import { Member, Book, Loan, LoanRules, Reservation } from '@/types';
+import { Member, Book, Loan, LoanRules, Reservation, Language } from '@/types';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
 import { SmartBookCover } from '@/components/common/SmartBookCover';
+
+export const PORTAL_I18N = {
+  id: {
+    portalTitle: 'Portal Mandiri Siswa & Orang Tua (Buku Impian & Riwayat)',
+    schoolTagline: 'KB-TK Bhakti Tunas Harapan (SBTH) Magelang • "Be Smart, Be Kind"',
+    loginTitle: 'Masuk ke Akun Perpustakaan Ananda',
+    loginSubtitle: 'Lihat buku impian yang ingin dipinjam, cek batas waktu buku di rumah, dan riwayat membaca ananda dari HP.',
+    usernameLabel: 'Username / Kode Anggota Siswa',
+    usernamePlaceholder: 'Contoh: alvaro / SBTH-M-0015',
+    passwordLabel: 'Password',
+    passwordPlaceholder: 'Password ananda (default: 123)',
+    forgotUserBtn: 'Lupa Username?',
+    forgotPassBtn: 'Lupa Password?',
+    loginSubmit: 'Masuk ke Akun Perpustakaan',
+    quickDemoTitle: '— Coba Cepat Akun Contoh Siswa (1-Klik) —',
+    forgotWaText: 'Lupa Username? Kirim via WhatsApp Ortu',
+    resetPassText: 'Lupa Password? Reset Mandiri',
+    noteHp: 'Data login ananda bisa dicek dan dikirim langsung ke WhatsApp nomor HP orang tua tanpa perlu repot antre.',
+    hello: 'Halo',
+    parentOf: 'Orang Tua/Wali',
+    changePass: 'Ubah Password',
+    closeAccount: 'Tutup Akun',
+    logout: 'Keluar',
+    tabWishlist: 'Buku Impianku',
+    tabReservations: 'Reservasi Saya',
+    tabActiveLoans: 'Sedang Kupinjam',
+    tabHistory: 'Sudah Selesai Dibaca',
+    tabFines: 'Kas Denda & QRIS',
+    tabCatalog: 'Cari & Pilih Buku TK',
+    wishlistHeading: 'Daftar Buku Impian yang Ingin Kupinjam Selanjutnya',
+    wishlistSub: 'Tandai buku yang ananda sukai agar mudah ditemukan saat datang ke perpustakaan sekolah.',
+    btnAddWishlist: '+ Tambah Buku Impian',
+    emptyWishlist: 'Belum ada buku impian yang disimpan. Yuk, cari buku dongeng atau sains favorit ananda!',
+    openCatalogBtn: 'Buka Katalog Buku TK',
+    removeFromWish: 'Hapus dari Impian',
+    resQueueHeading: 'Antrean Reservasi Buku Ananda',
+    resQueueSub: 'Buku yang dipesan diprioritaskan saat dikembalikan ke perpustakaan dengan batas waktu simpan di rak 1x24 jam.',
+    btnSearchRes: '+ Cari Buku untuk Direservasi',
+    emptyRes: 'Belum ada buku yang direservasi. Jika buku favorit sedang dipinjam teman lain, ananda bisa memesan lebih dulu agar disimpan saat dikembalikan!',
+    resReadyTag: '⚡ Siap Diambil di Rak',
+    resPendingTag: '⏳ Dalam Antrean',
+    resFulfilledTag: '✅ Selesai',
+    resCancelledTag: 'Dibatalkan',
+    dateReserved: 'Tanggal Reservasi',
+    datePickupPlan: 'Rencana Ambil',
+    shelfReadyHeading: 'Buku Siap di Rak Reservasi Perpustakaan!',
+    timerRemaining: 'Sisa Waktu Simpan (1x24 Jam)',
+    shelfReadyDesc: 'Silakan datang ke meja pustakawan sebelum waktu habis. Jika lewat 24 jam, buku otomatis tersedia kembali untuk umum.',
+    waitingReturnHeading: 'Menunggu Buku Dikembalikan Peminjam Sebelumnya',
+    waitingReturnDesc: 'Ananda mendapat prioritas pertama. Saat buku diserahkan ke perpustakaan, hitungan mundur 1x24 jam akan langsung dimulai dan buku disisihkan.',
+    cancelResBtn: 'Batalkan Reservasi',
+    loansHeading: 'Buku yang Sedang Ada di Rumah Ananda',
+    emptyLoans: 'Saat ini belum ada buku perpustakaan yang sedang dipinjam.',
+    historyHeading: 'Buku yang Sudah Pernah Dibaca & Dikembalikan',
+    emptyHistory: 'Belum ada riwayat buku yang selesai dibaca.',
+    catalogSearchPlaceholder: 'Ketik judul buku atau cerita (misal: Kancil, Dinosaurus)...',
+    allCategories: 'Semua Kategori',
+    addWish: '+ Buku Impianku',
+    savedWish: 'Tersimpan di Impianku',
+    reserveBtn: '🔖 Reservasi Buku',
+    resModalTitle: 'Konfirmasi Reservasi Buku',
+    resModalSub: 'Pesan buku ini agar otomatis disisihkan untuk ananda saat tiba di perpustakaan.',
+    resPickupDateLabel: 'Rencana Tanggal Pengambilan (Opsional):',
+    resConfirmBtn: 'Konfirmasi Pesan Buku Ini',
+    resQuotaInfo: 'Ketentuan Kuota Reservasi:',
+    resScenarioNoLoan: 'Belum ada pinjaman aktif: Kuota reservasi',
+    resScenarioHasLoan: 'Masih meminjam buku di rumah: Kuota reservasi',
+    cancel: 'Batal',
+  },
+  en: {
+    portalTitle: 'Student & Parent Self-Service Portal (Wishlist & History)',
+    schoolTagline: 'KB-TK Bhakti Tunas Harapan (SBTH) Magelang • "Be Smart, Be Kind"',
+    loginTitle: 'Sign In to Student Library Account',
+    loginSubtitle: 'View book wishlists, check due dates for books at home, and see reading history right from your phone.',
+    usernameLabel: 'Student Username / Member ID',
+    usernamePlaceholder: 'Example: alvaro / SBTH-M-0015',
+    passwordLabel: 'Password',
+    passwordPlaceholder: 'Student password (default: 123)',
+    forgotUserBtn: 'Forgot Username?',
+    forgotPassBtn: 'Forgot Password?',
+    loginSubmit: 'Sign In to Library',
+    quickDemoTitle: '— Quick 1-Click Demo Accounts —',
+    forgotWaText: 'Forgot Username? Send via WhatsApp',
+    resetPassText: 'Forgot Password? Self Reset',
+    noteHp: 'Credentials can be checked and sent directly to parent WhatsApp phone number without queuing.',
+    hello: 'Hello',
+    parentOf: 'Parent/Guardian',
+    changePass: 'Change Password',
+    closeAccount: 'Close Account',
+    logout: 'Sign Out',
+    tabWishlist: 'My Wishlist',
+    tabReservations: 'My Reservations',
+    tabActiveLoans: 'Currently Borrowing',
+    tabHistory: 'Finished Books',
+    tabFines: 'Fines & QRIS',
+    tabCatalog: 'Search & Pick Books',
+    wishlistHeading: 'My Book Wishlist for Future Visits',
+    wishlistSub: 'Bookmark your favorite stories so you can easily find them when visiting the school library.',
+    btnAddWishlist: '+ Add to Wishlist',
+    emptyWishlist: 'No dream books saved yet. Go find your favorite fairy tale or science book!',
+    openCatalogBtn: 'Open Kids Book Catalog',
+    removeFromWish: 'Remove from Wishlist',
+    resQueueHeading: 'My Book Reservation Queue',
+    resQueueSub: 'Reserved books are prioritized when returned to the library and held for 1x24 hours.',
+    btnSearchRes: '+ Find Book to Reserve',
+    emptyRes: 'No books reserved yet. If a favorite book is currently borrowed by a friend, reserve it so it is held for you!',
+    resReadyTag: '⚡ Ready for Pickup on Shelf',
+    resPendingTag: '⏳ In Queue',
+    resFulfilledTag: '✅ Completed',
+    resCancelledTag: 'Cancelled',
+    dateReserved: 'Reservation Date',
+    datePickupPlan: 'Planned Pickup',
+    shelfReadyHeading: 'Book Ready on the Reservation Shelf!',
+    timerRemaining: 'Remaining Hold Time (1x24 Hours)',
+    shelfReadyDesc: 'Please visit the librarian desk before time expires. After 24 hours, the book is released for other students.',
+    waitingReturnHeading: 'Waiting for Current Borrower to Return',
+    waitingReturnDesc: 'You have first priority! Once the physical book is returned, the 24-hour countdown will begin.',
+    cancelResBtn: 'Cancel Reservation',
+    loansHeading: 'Books Currently at Home',
+    emptyLoans: 'No books currently borrowed from the library.',
+    historyHeading: 'Books Already Read & Returned',
+    emptyHistory: 'No reading history recorded yet.',
+    catalogSearchPlaceholder: 'Search titles or stories (e.g. Rabbit, Dinosaur)...',
+    allCategories: 'All Categories',
+    addWish: '+ Wishlist',
+    savedWish: 'Saved in Wishlist',
+    reserveBtn: '🔖 Reserve Book',
+    resModalTitle: 'Confirm Book Reservation',
+    resModalSub: 'Reserve this book so it is automatically set aside for you when returned to the library.',
+    resPickupDateLabel: 'Planned Pickup Date (Optional):',
+    resConfirmBtn: 'Confirm Book Reservation',
+    resQuotaInfo: 'Reservation Quota Policy:',
+    resScenarioNoLoan: 'No active loans: Reservation quota is',
+    resScenarioHasLoan: 'Currently holding books at home: Reservation quota is',
+    cancel: 'Cancel',
+  },
+  zh: {
+    portalTitle: '学生与家长自主服务中心 (心愿书单与借阅历史)',
+    schoolTagline: 'KB-TK Bhakti Tunas Harapan (SBTH) • 好好学习，天天向上',
+    loginTitle: '登录学生图书馆账户',
+    loginSubtitle: '随时在手机上查看想要阅读的心愿书单、在借图书归还期限及借阅成长记录。',
+    usernameLabel: '学生用户名 / 学员编号',
+    usernamePlaceholder: '例如: alvaro / SBTH-M-0015',
+    passwordLabel: '密码',
+    passwordPlaceholder: '学生密码 (默认: 123)',
+    forgotUserBtn: '忘记用户名？',
+    forgotPassBtn: '忘记密码？',
+    loginSubmit: '登录图书馆账户',
+    quickDemoTitle: '— 一键体验学生示例账户 —',
+    forgotWaText: '忘记用户名？发送至家长微信/WhatsApp',
+    resetPassText: '忘记密码？自助重置',
+    noteHp: '登录信息可直接发送至家长手机，无需排队即可快速找回。',
+    hello: '你好',
+    parentOf: '家长/监护人',
+    changePass: '修改密码',
+    closeAccount: '注销账户',
+    logout: '退出登录',
+    tabWishlist: '我的心愿单',
+    tabReservations: '我的预订',
+    tabActiveLoans: '正在借阅',
+    tabHistory: '阅读历史',
+    tabFines: '罚款与QRIS',
+    tabCatalog: '搜索与选择图书',
+    wishlistHeading: '我想要阅读的心愿书单',
+    wishlistSub: '标记喜爱的图书，到校图书馆时即可快速找到。',
+    btnAddWishlist: '+ 添加心愿图书',
+    emptyWishlist: '暂无心愿图书。快去寻找喜欢的绘本或科普图书吧！',
+    openCatalogBtn: '打开儿童图书目录',
+    removeFromWish: '从心愿单移除',
+    resQueueHeading: '我的图书预订排队',
+    resQueueSub: '预订图书在还回图书馆后享有优先权，并在保留书架存放1x24小时。',
+    btnSearchRes: '+ 查找图书进行预订',
+    emptyRes: '暂无预订图书。如果心仪的书正被同学借阅，您可以提前预订！',
+    resReadyTag: '⚡ 已在书架准备就绪',
+    resPendingTag: '⏳ 正在排队等待',
+    resFulfilledTag: '✅ 已完成',
+    resCancelledTag: '已取消',
+    dateReserved: '预订日期',
+    datePickupPlan: '计划取书',
+    shelfReadyHeading: '图书已放置在图书馆预订专架！',
+    timerRemaining: '剩余保管时间 (1x24小时)',
+    shelfReadyDesc: '请在倒计时结束前到图书馆柜台领取。超过24小时将自动重新向大众开放。',
+    waitingReturnHeading: '正在等待前一位读者归还图书',
+    waitingReturnDesc: '您享有第一顺位优先权。图书归还后将立即启动24小时保留倒计时。',
+    cancelResBtn: '取消预订',
+    loansHeading: '目前正在家中阅读的图书',
+    emptyLoans: '当前没有正在借阅的图书。',
+    historyHeading: '已读完并归还的图书',
+    emptyHistory: '暂无阅读记录。',
+    catalogSearchPlaceholder: '输入书名或故事主题 (如: 恐龙, 动物)...',
+    allCategories: '所有分类',
+    addWish: '+ 心愿单',
+    savedWish: '已在心愿单',
+    reserveBtn: '🔖 预订此书',
+    resModalTitle: '确认图书预订',
+    resModalSub: '预订此书，图书归还后系统将自动为您保留。',
+    resPickupDateLabel: '计划到馆取书日期 (选填):',
+    resConfirmBtn: '确认预订图书',
+    resQuotaInfo: '预订配额规则:',
+    resScenarioNoLoan: '无在借图书: 最大预订配额为',
+    resScenarioHasLoan: '家中仍有借阅图书: 最大预订配额为',
+    cancel: '取消',
+  },
+};
 
 interface StudentPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectBookForWishlist?: (book: Book) => void;
+  language?: Language;
 }
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
   onClose,
+  language,
 }) => {
   const [currentUser, setCurrentUser] = useState<Member | null>(null);
   const [usernameInput, setUsernameInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
 
+  // Trilingual Language state for Student Portal
+  const [portalLang, setPortalLang] = useState<Language>(language || 'id');
+  const tPortal = PORTAL_I18N[portalLang] || PORTAL_I18N.id;
+
+  const handleLanguageChange = (lang: Language) => {
+    setPortalLang(lang);
+    libraryStore.setLanguage(lang);
+    soundFx.playScanBeep();
+  };
+
+  // Safe Date Formatter to eradicate any "Invalid Date"
+  const formatDateSafe = (dateVal?: string | Date | null, locale = 'id-ID') => {
+    if (!dateVal) return new Date().toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) {
+      return new Date().toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   // Portal tabs
   const [activeTab, setActiveTab] = useState<'WISHLIST' | 'ACTIVE_LOANS' | 'RESERVATIONS' | 'HISTORY' | 'FINES' | 'CATALOG'>('WISHLIST');
   const [catalogSearch, setCatalogSearch] = useState<string>('');
   const [catalogCategory, setCatalogCategory] = useState<string>('ALL');
+
+  // Direct Reservation Dialog state
+  const [isResModalOpen, setIsResModalOpen] = useState<boolean>(false);
+  const [resTargetBook, setResTargetBook] = useState<Book | null>(null);
+  const [resPickupDate, setResPickupDate] = useState<string>('');
+  const [resError, setResError] = useState<string>('');
 
   // Live ticking clock for 1x24h countdown
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -86,6 +318,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [categories, setCategories] = useState(libraryStore.getCategories());
 
   useEffect(() => {
+    if (language) {
+      setPortalLang(language);
+    }
+  }, [language]);
+
+  useEffect(() => {
     if (isOpen) {
       const session = libraryStore.getActiveStudentSession();
       setCurrentUser(session);
@@ -96,8 +334,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       setResetResult(null);
       setChangePasswordMsg('');
       setCloseAccountError('');
+      setPortalLang(language || libraryStore.getLanguage());
     }
-  }, [isOpen]);
+  }, [isOpen, language, refreshTrigger]);
 
   // Live 1-second interval for 24h countdown ticker
   useEffect(() => {
@@ -277,6 +516,34 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     return true;
   });
 
+  const handleOpenReservationModal = (book: Book) => {
+    setResTargetBook(book);
+    setResPickupDate('');
+    setResError('');
+    setIsResModalOpen(true);
+  };
+
+  const handleConfirmReservation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !resTargetBook) return;
+    try {
+      libraryStore.createReservation(
+        resTargetBook.id,
+        currentUser.id,
+        currentUser.name,
+        resPickupDate || undefined
+      );
+      soundFx.playSuccessChime();
+      setIsResModalOpen(false);
+      setResTargetBook(null);
+      setRefreshTrigger((v) => v + 1);
+      setActiveTab('RESERVATIONS');
+    } catch (err: any) {
+      soundFx.playErrorBeep();
+      setResError(err.message || 'Gagal melakukan reservasi.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in">
       <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 my-6">
@@ -289,19 +556,62 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                Portal Mandiri Siswa & Orang Tua (Buku Impian & Riwayat)
+                {tPortal.portalTitle}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                KB-TK Bhakti Tunas Harapan (SBTH) Magelang • &quot;Be Smart, Be Kind&quot;
+                {tPortal.schoolTagline}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          
+          <div className="flex items-center gap-2">
+            {/* Multilingual Selector Pills (ID | EN | 中文) */}
+            <div className="flex items-center h-8 p-0.5 rounded-lg bg-surface-2 dark:bg-slate-800 border border-border dark:border-slate-700 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('id')}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                  portalLang === 'id'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Bahasa Indonesia"
+              >
+                ID
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                  portalLang === 'en'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('zh')}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${
+                  portalLang === 'zh'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="中文"
+              >
+                中文
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="rounded-full p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* 1. JIKA BELUM LOGIN: FORM LOGIN + RESET PASSWORD MANDIRI */}
@@ -313,10 +623,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   🎒
                 </span>
                 <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
-                  Masuk ke Akun Perpustakaan Ananda
+                  {tPortal.loginTitle}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Lihat buku impian yang ingin dipinjam, cek batas waktu buku di rumah, dan riwayat membaca ananda dari HP.
+                  {tPortal.loginSubtitle}
                 </p>
               </div>
 
@@ -459,14 +769,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
-                      Halo, {currentUser.name}! 👋
+                      {tPortal.hello}, {currentUser.name}! 👋
                     </h3>
                     <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
                       {currentUser.classGroup}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Orang Tua/Wali: <strong>{currentUser.parentName || '-'}</strong> ({currentUser.parentPhone || '-'})
+                    {tPortal.parentOf}: <strong>{currentUser.parentName || '-'}</strong> ({currentUser.parentPhone || '-'})
                   </p>
                 </div>
               </div>
@@ -480,7 +790,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   title="Ubah Password Akun Siswa"
                 >
                   <Key className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Ubah Password</span>
+                  <span>{tPortal.changePass}</span>
                 </button>
 
                 <button
@@ -493,7 +803,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   title="Ajukan Penutupan / Penghapusan Akun"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  <span>Tutup Akun</span>
+                  <span>{tPortal.closeAccount}</span>
                 </button>
 
                 <button
@@ -502,7 +812,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  Keluar
+                  {tPortal.logout}
                 </button>
               </div>
             </div>
@@ -519,7 +829,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 }`}
               >
                 <Heart className="h-4 w-4 text-rose-500" />
-                🌟 Buku Impianku ({wishlistBooks.length})
+                🌟 {tPortal.tabWishlist} ({wishlistBooks.length})
               </button>
               <button
                 type="button"
@@ -531,7 +841,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 }`}
               >
                 <Bookmark className="h-4 w-4 text-fuchsia-500" />
-                ⏳ Reservasi Saya ({userReservations.length})
+                ⏳ {tPortal.tabReservations} ({userReservations.length})
               </button>
               <button
                 type="button"
@@ -543,7 +853,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 }`}
               >
                 <BookOpen className="h-4 w-4 text-blue-500" />
-                📖 Sedang Kupinjam ({activeLoans.length})
+                📖 {tPortal.tabActiveLoans} ({activeLoans.length})
               </button>
               <button
                 type="button"
@@ -555,7 +865,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 }`}
               >
                 <CheckCircle className="h-4 w-4 text-emerald-500" />
-                📜 Sudah Selesai Dibaca ({loanHistory.length})
+                📜 {tPortal.tabHistory} ({loanHistory.length})
               </button>
               {libraryStore.getFinanceModuleEnabled() && (
                 <button
@@ -568,7 +878,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   }`}
                 >
                   <QrCode className="h-4 w-4 text-amber-500" />
-                  💰 Kas Denda & QRIS {fineAmount > 0 ? `(Rp ${fineAmount.toLocaleString('id-ID')})` : ''}
+                  💰 {tPortal.tabFines} {fineAmount > 0 ? `(Rp ${fineAmount.toLocaleString('id-ID')})` : ''}
                 </button>
               )}
               <button
@@ -581,7 +891,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 }`}
               >
                 <Search className="h-4 w-4 text-indigo-500" />
-                🔍 Cari & Pilih Buku TK
+                🔍 {tPortal.tabCatalog}
               </button>
             </div>
 
@@ -748,12 +1058,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                                     }`}
                                   >
                                     {res.status === 'READY_FOR_PICKUP'
-                                      ? '⚡ Siap Diambil di Rak'
+                                      ? tPortal.resReadyTag
                                       : res.status === 'PENDING'
-                                      ? '⏳ Dalam Antrean'
+                                      ? tPortal.resPendingTag
                                       : res.status === 'FULFILLED'
-                                      ? '✅ Selesai'
-                                      : 'Dibatalkan'}
+                                      ? tPortal.resFulfilledTag
+                                      : tPortal.resCancelledTag}
                                   </span>
                                 </div>
 
@@ -766,24 +1076,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
                                 <div className="text-[10px] text-slate-500 dark:text-slate-400 space-y-0.5 pt-1">
                                   <div>
-                                    📅 Tanggal Reservasi:{' '}
+                                    📅 {tPortal.dateReserved}:{' '}
                                     <strong className="text-slate-700 dark:text-slate-200">
-                                      {new Date(res.requestDate).toLocaleDateString('id-ID', {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        year: 'numeric',
-                                      })}
+                                      {formatDateSafe(res.requestDate, portalLang === 'zh' ? 'zh-CN' : portalLang === 'en' ? 'en-US' : 'id-ID')}
                                     </strong>
                                   </div>
                                   {res.desiredPickupDate && (
                                     <div>
-                                      🎯 Rencana Ambil:{' '}
+                                      🎯 {tPortal.datePickupPlan}:{' '}
                                       <strong className="text-purple-600 dark:text-purple-400">
-                                        {new Date(res.desiredPickupDate).toLocaleDateString('id-ID', {
-                                          day: 'numeric',
-                                          month: 'short',
-                                          year: 'numeric',
-                                        })}
+                                        {formatDateSafe(res.desiredPickupDate, portalLang === 'zh' ? 'zh-CN' : portalLang === 'en' ? 'en-US' : 'id-ID')}
                                       </strong>
                                     </div>
                                   )}
@@ -1042,18 +1344,30 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                             <p className="text-[10px] text-slate-400 truncate">{book.author}</p>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleToggleWishlist(book.id)}
-                            className={`w-full py-1.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition ${
-                              isWish
-                                ? 'bg-rose-50 dark:bg-rose-950 text-rose-600 border border-rose-200 dark:border-rose-800'
-                                : 'bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                            }`}
-                          >
-                            <Heart className={`h-3.5 w-3.5 ${isWish ? 'fill-rose-500 text-rose-500' : ''}`} />
-                            {isWish ? 'Tersimpan di Impianku' : '+ Buku Impianku'}
-                          </button>
+                          <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReservationModal(book)}
+                              className="w-full py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 active:scale-95 text-white flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                              title="Pesan buku ini untuk disisihkan di rak reservasi"
+                            >
+                              <Bookmark className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{tPortal.reserveBtn}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleWishlist(book.id)}
+                              className={`w-full py-1.5 px-2.5 rounded-xl text-[10px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                isWish
+                                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-800 font-bold'
+                                  : 'bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              <Heart className={`h-3 w-3 shrink-0 ${isWish ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
+                              <span className="truncate">{isWish ? tPortal.savedWish : tPortal.addWish}</span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1064,6 +1378,139 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* SUB-MODAL 0: RESERVASI BUKU LANGSUNG DARI PORTAL SISWA */}
+      {isResModalOpen && resTargetBook && currentUser && (() => {
+        const cat = categories.find((c) => c.id === resTargetBook.categoryId);
+        const maxQuota = activeLoans.length > 0 
+          ? (rules.maxReservationsWhenBorrowing ?? 1)
+          : (rules.maxReservationsTotal ?? 2);
+        const activeResCount = userReservations.filter((r) => r.status === 'PENDING' || r.status === 'READY_FOR_PICKUP').length;
+        const remainingQuota = Math.max(0, maxQuota - activeResCount);
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+            <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Bookmark className="h-5 w-5 text-fuchsia-500" />
+                  <span>{tPortal.resModalTitle}</span>
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsResModalOpen(false);
+                    setResTargetBook(null);
+                    setResError('');
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {resError && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{resError}</span>
+                </div>
+              )}
+
+              {/* Target Book Info Card */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex gap-3 items-center">
+                <div className="h-20 w-14 rounded-xl overflow-hidden shrink-0 shadow-xs">
+                  <SmartBookCover
+                    title={resTargetBook.title}
+                    author={resTargetBook.author}
+                    coverUrl={resTargetBook.coverImage}
+                    categoryId={resTargetBook.categoryId}
+                    aspectRatio="h-full w-full"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span
+                    className="inline-block px-2 py-0.5 rounded-md text-[8px] font-bold text-white truncate max-w-full"
+                    style={{ backgroundColor: cat?.colorHex || '#c026d3' }}
+                  >
+                    {cat?.name || 'Cerita Anak'}
+                  </span>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 mt-1">
+                    {resTargetBook.title}
+                  </h4>
+                  <p className="text-[10px] text-slate-400 truncate">{resTargetBook.author}</p>
+                </div>
+              </div>
+
+              {/* Reservation Quota Explainer */}
+              <div className="p-3 rounded-xl bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-800 text-[11px] text-fuchsia-900 dark:text-fuchsia-200 space-y-1 leading-relaxed">
+                <div className="flex items-center justify-between font-bold text-fuchsia-700 dark:text-fuchsia-300">
+                  <span>{tPortal.resQuotaInfo}</span>
+                  <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-fuchsia-100 dark:bg-fuchsia-900/60">
+                    Sisa Kuota: {remainingQuota} / {maxQuota} Buku
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                  {activeLoans.length > 0 ? (
+                    <>
+                      • {tPortal.resScenarioHasLoan} <strong>{maxQuota} buku</strong> (saat ini sedang meminjam {activeLoans.length} buku di rumah).
+                    </>
+                  ) : (
+                    <>
+                      • {tPortal.resScenarioNoLoan} <strong>{maxQuota} buku</strong> (belum ada pinjaman di rumah).
+                    </>
+                  )}
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  • Begitu buku dikembalikan ke perpustakaan, hitungan mundur <strong>1x24 jam</strong> akan aktif dan buku disisihkan khusus untuk ananda.
+                </p>
+              </div>
+
+              <form onSubmit={handleConfirmReservation} className="space-y-4 text-xs">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    {tPortal.resPickupDateLabel}
+                  </label>
+                  <input
+                    type="date"
+                    value={resPickupDate}
+                    onChange={(e) => setResPickupDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs text-slate-800 dark:text-slate-100 outline-hidden focus:border-fuchsia-500"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Boleh dikosongkan. Rencana tanggal memudahkan pustakawan menyiapkan buku di meja sirkulasi.
+                  </span>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResModalOpen(false);
+                      setResTargetBook(null);
+                      setResError('');
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                  >
+                    {tPortal.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={remainingQuota <= 0}
+                    className={`px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 ${
+                      remainingQuota <= 0
+                        ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
+                        : 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white active:scale-95'
+                    }`}
+                  >
+                    <Bookmark className="h-4 w-4" />
+                    <span>{remainingQuota <= 0 ? 'Batas Kuota Tercapai' : tPortal.resConfirmBtn}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* SUB-MODAL 1: RESET PASSWORD LANGSUNG KE WA ORTU */}
       {isResetModalOpen && (

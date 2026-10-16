@@ -1,0 +1,190 @@
+================================================================================
+          PANDUAN LENGKAP INSTALASI & CARA MEMBUKA APLIKASI
+              SISTEM INFORMASI PERPUSTAKAAN SBTH TK
+             (Sekolah Bina Tunas Harapan - Magelang)
+================================================================================
+
+Selamat datang! Dokumen ini berisi petunjuk praktis dan mudah dipahami untuk 
+menginstal, menjalankan, dan mengoperasikan Aplikasi Perpustakaan Digital 
+SBTH TK di komputer perpustakaan sekolah maupun laptop guru.
+
+
+================================================================================
+BAGIAN 1: KEBUTUHAN SISTEM & PERSIAPAN AWAL
+================================================================================
+Sebelum menjalankan aplikasi, pastikan komputer Anda memenuhi syarat berikut:
+
+1. Sistem Operasi: 
+   - Windows 10 atau Windows 11 (64-bit).
+
+2. Perangkat Lunak Wajib (Hanya perlu diinstall 1 kali):
+   - Node.js versi 18 atau versi terbaru (LTS).
+   - Cara Cek: Buka Command Prompt, ketik: node -v
+   - Jika belum ada, download gratis di: https://nodejs.org/
+     (Pilih tombol warna hijau "LTS", download filenya, lalu klik Next-Next 
+      sampai selesai).
+
+3. Peramban Web (Browser) Rekomendasi:
+   - Google Chrome atau Microsoft Edge terbaru.
+
+4. Perangkat Tambahan (Opsional):
+   - Barcode Scanner USB (Plug & Play, colokkan ke port USB langsung siap pakai).
+   - Printer biasa untuk Kertas Stiker Tom & Jerry No. 103 (Ukuran 32 x 64 mm).
+   - Atau Printer Thermal Roll (Ukuran stiker 40 x 30 mm).
+
+
+================================================================================
+BAGIAN 2: CARA INSTALASI PERTAMA KALI (SANGAT MUDAH)
+================================================================================
+1. Buka folder utama aplikasi:
+   "APLIKASI PERPUSTAKAAN SBTH"
+
+2. Pasang Shortcut di Desktop (Cukup 1 kali klik):
+   - Cari file bernama: "PASANG_SHORTCUT_DESKTOP.bat"
+   - Klik ganda (double-click) file tersebut.
+   - Ikon jalan pintas (shortcut) otomatis terpasang rapi di layar Desktop Anda.
+
+3. Instalasi selesai! Semua dependensi sistem akan otomatis terpasang saat 
+   aplikasi pertama kali dijalankan.
+
+
+================================================================================
+BAGIAN 3: CARA MEMBUKA & MENJALANKAN APLIKASI
+================================================================================
+
+A. JIKA DI KOMPUTER UTAMA PERPUSTAKAAN (KOMPUTER PUSAT / SERVER):
+-----------------------------------------------------------------
+1. Klik ganda file: "JALANKAN_PERPUSTAKAAN_PUSAT.bat" 
+   (Atau klik shortcut "Perpustakaan SBTH TK" yang ada di Desktop).
+2. Sebuah jendela hitam (Server Pusat) akan terbuka.
+3. Tunggu sekitar 3 - 5 detik, browser Google Chrome/Edge akan otomatis terbuka 
+   menampilkan halaman aplikasi di alamat:
+   http://localhost:3000
+4. CATATAN PENTING:
+   Biarkan jendela hitam tersebut tetap terbuka di latar belakang selama 
+   perpustakaan sedang beroperasi. Jangan ditutup tanda silang (X) sebelum selesai.
+
+
+B. JIKA DIKOMPUTER LAIN / LAPTOP GURU / TABLET (JARINGAN WI-FI SEKOLAH):
+-----------------------------------------------------------------------
+Aplikasi ini mendukung akses bersamaan dari beberapa komputer atau laptop di sekolah:
+1. Pastikan laptop/tablet Anda terhubung ke jaringan Wi-Fi/LAN yang SAMA dengan 
+   Komputer Pusat perpustakaan.
+2. Di laptop Anda, klik ganda file: "BUKA_PERPUSTAKAAN_KLIEN.bat"
+3. Atau buka Google Chrome di HP/Laptop, lalu ketik alamat IP yang tertera 
+   di layar Komputer Pusat (Contoh: http://192.168.1.13:3000).
+
+
+================================================================================
+BAGIAN 4: INFORMASI LOGIN & KATA SANDI (DEFAULT CREDENTIALS)
+================================================================================
+
+1. Mode Siswa / Kiosk OPAC Anak:
+   - Tanpa password (Bebas digunakan oleh anak-anak dan orang tua untuk 
+     mencari buku secara mandiri dan visual).
+
+2. Mode Pustakawan / Administrator:
+   - Username : ms_kriss
+   - Password : sbth2026
+   - Atau PIN Cepat: 1234
+   *(Gunakan username & password ini jika diminta otentikasi saat membuka menu 
+     Pengaturan Sistem atau mengubah data administrasi).*
+
+
+================================================================================
+BAGIAN 5: CARA PENGGUNAAN FITUR-FITUR UTAMA
+================================================================================
+
+1. INPUT BUKU BARU DENGAN SCAN ISBN & AUTOFILL DINAMIS:
+   - Masuk ke tab "Koleksi & Eksemplar".
+   - Klik tombol oranye "+ Scan ISBN / Tambah Buku".
+   - Arahkan scanner ke barcode ISBN di sampul belakang buku (atau ketik nomor ISBN).
+   - Klik tombol "Auto-Fill" (Judul, pengarang, penerbit, tahun terbit otomatis terisi).
+   - Klik tombol "✨ Auto Cari Sampul Google" (Sampul resmi buku langsung ditarik).
+   - Penggantian Buku Cepat (Dynamic Switch): Jika buku sudah terdaftar, lalu Anda 
+     mengetik judul lain atau ISBN lain di kotak pencarian, tampilan bawah otomatis 
+     langsung berganti menampilkan autofill buku baru tanpa perlu menutup (close) 
+     dan membuka ulang modal!
+   - Default Eksemplar: Jumlah eksemplar fisik bawaan sekarang adalah 1 buku (bukan 3), 
+     sehingga pas untuk pengadaan satuan. Anda dapat menambah eksemplar dengan tombol cepat.
+   - Klik "Simpan & Tambah Buku".
+
+2. CETAK LABEL STIKER PUNGGUNG BUKU (PRESISI TOM & JERRY 103):
+   - Klik tombol "🖨️ Cetak Label" di tab Koleksi Buku.
+   - Pilih jenis stiker: "T&J No. 103 (32x64mm)" atau "Thermal Roll (40x30mm)".
+   - Fitur Hemat Kertas: Jika kertas stiker sudah pernah terpakai sebagian, 
+     klik nomor stiker awal (#2, #3, dll.) agar stiker kosong sebelumnya dilewati.
+   - Centang kotak stiker yang ingin dicetak (Bisa mencentang banyak buku sekaligus, 
+     atau klik tombol "Pilih Belum Dicetak").
+   - Klik tombol hijau "Cetak Sekarang (Ctrl + P)".
+   - Pada jendela cetak browser: Pilih Margin = "None / Kosong" dan Skala = "100%".
+
+3. MANAJEMEN RAK BUKU (SHELF MANAGEMENT):
+   - Di tab Koleksi Buku, klik tombol "🗄️ Atur Rak".
+   - Pustakawan dapat melihat denah visual rak (Rak Kuning B, Rak Hijau A, dll.),
+     mengubah kapasitas rak, dan menyesuaikan warna kategori stiker.
+
+4. TRANSAKSI SIRKULASI (PINJAM & KEMBALI KILAT):
+   - Buka tab "⚡ Sirkulasi & Pinjam-Kembali".
+   - Peminjaman: Pilih nama Siswa -> Scan barcode buku -> Tekan Enter / klik 
+     "Proses Peminjaman".
+   - Pengembalian: Klik sub-tab "PENGEMBALIAN", lalu scan barcode buku yang 
+     dikembalikan. Status buku langsung lunas dan stok kembali bertambah otomatis.
+
+5. PENGELOLAAN ANGGOTA & HAPUS MASSAL SISWA ALUMNI:
+   - Buka tab "👥 Data Anggota & Kelas".
+   - Saring siswa berdasarkan kelas: TK-A, TK-B, atau Kelompok Bermain.
+   - Saat pergantian tahun ajaran baru, klik filter "🎓 Alumni / Siswa Lulus",
+     centang semua siswa lulus, lalu klik "Hapus Massal Alumni" untuk 
+     membersihkan data lama dalam satu kali klik.
+
+6. PENYIMPANAN PENGATURAN & MODE ANTI-RESET (PERMANENT PREFERENCES):
+   - Setiap preferensi pustakawan (Mode Tampilan Grid/Tabel/Kartu, Tab & Sub-Tab aktif, 
+     efek suara on/off, tema Dark/Light, dan profil sekolah) tersimpan otomatis.
+   - Saat aplikasi ditutup dan dibuka kembali, seluruh mode yang sudah disave akan 
+     terbuka persis seperti semula tanpa mengulang pengaturan dari awal.
+   - Data katalog riil terlindungi secara permanen dari penimpaan data mock-up.
+
+7. CADANGAN DATA (BACKUP & RESTORE):
+   - Buka menu "Pengaturan" (ikon gerigi di kanan atas).
+   - Masuk ke tab "Backup & Restore".
+   - Anda dapat mengunduh berkas cadangan database (JSON) atau mengekspor seluruh 
+     data buku ke dalam format Microsoft Excel.
+
+
+================================================================================
+BAGIAN 6: CARA MENUTUP / MENONAKTIFKAN APLIKASI
+================================================================================
+1. Tutup tab aplikasi di Google Chrome / Microsoft Edge.
+2. Klik jendela hitam "PERPUSTAKAAN SBTH TK - SERVER PUSAT", lalu tekan tombol 
+   tanda silang (X) di pojok kanan atas jendela hitam tersebut.
+3. Server otomatis berhenti dengan aman dan seluruh data telah tersimpan.
+
+
+================================================================================
+BAGIAN 7: SOLUSI JIKA MENGALAMI KENDALA (TROUBLESHOOTING)
+================================================================================
+
+1. Masalah: Browser menampilkan "This site can't be reached" (Halaman tidak terbuka)
+   Solusi : Pastikan jendela hitam "JALANKAN_PERPUSTAKAAN_PUSAT.bat" masih berjalan 
+            dan tidak sengaja tertutup. Jika tertutup, jalankan kembali file .bat tersebut.
+
+2. Masalah: Tulisan 'node' is not recognized / Node.js tidak ditemukan
+   Solusi : Instal Node.js dari https://nodejs.org/ (versi LTS). Setelah instalasi 
+            selesai, restart laptop Anda terlebih dahulu.
+
+3. Masalah: Scanner barcode USB tidak merespons
+   Solusi : Pastikan kabel USB scanner tercolok kencang. Scanner berfungsi seperti 
+            keyboard—pastikan kursor aktif di dalam kotak isian sebelum melakukan scan.
+
+4. Masalah: Menonton video demo muncul layar putih
+   Solusi : Video demo perpustakaan berekstensi .webm paling lancar dibuka menggunakan 
+            Google Chrome atau Microsoft Edge. Anda cukup klik ganda file:
+            "BUKA_VIDEO_DEMO.html" di folder ini.
+
+
+================================================================================
+Dukungan & Pengembangan:
+Sistem Informasi Perpustakaan SBTH TK Magelang
+"Be Smart, Be Kind"
+================================================================================

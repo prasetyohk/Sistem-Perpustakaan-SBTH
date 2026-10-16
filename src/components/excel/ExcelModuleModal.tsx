@@ -48,40 +48,64 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
         'Judul Buku': 'Kancil dan Buaya yang Cerdik',
         'Pengarang': 'Kak Bambang',
         'Penerbit': 'Erlangga for Kids',
+        'Tahun Terbit': '2024',
         'Kategori': 'DONGENG',
-        'Lokasi Rak': 'Rak B-1',
-        'Jumlah Buku': 3,
-        'Sumber': 'BELI',
+        'Posisi Rak': 'Rak Kuning B (Dongeng & Fabel) - Baris 1',
+        'Jumlah Eksemplar': 3,
+        'Halaman Buku': 32,
+        'Format Fisik': 'Cerita Bergambar',
+        'Sinopsis Singkat': 'Kisah fabel klasik kancil cerdik menyeberangi sungai penuh buaya dengan kejujuran dan kecerdikan.',
+        'Bahasa Buku': 'Indonesia',
+        'Sumber Perolehan': 'BELI',
+        'Nilai Buku (Rp)': 45000,
       },
       {
         'ISBN (Opsional)': '9786020524412',
         'Judul Buku': 'Seri Hewan Liar: Mengapa Jerapah Lehernya Panjang?',
         'Pengarang': 'dr. Satwa',
         'Penerbit': 'Gramedia Pustaka Utama',
+        'Tahun Terbit': '2023',
         'Kategori': 'ALAM',
-        'Lokasi Rak': 'Rak A-1',
-        'Jumlah Buku': 2,
-        'Sumber': 'HIBAH_ORTU',
+        'Posisi Rak': 'Rak Hijau A (Sains & Alam) - Baris 1',
+        'Jumlah Eksemplar': 2,
+        'Halaman Buku': 28,
+        'Format Fisik': 'Hardcover Bergambar',
+        'Sinopsis Singkat': 'Mengenal keunikan leher jerapah dan adaptasi hewan di sabana Afrika.',
+        'Bahasa Buku': 'Indonesia',
+        'Sumber Perolehan': 'HIBAH_ORTU',
+        'Nilai Buku (Rp)': 55000,
       },
       {
-        'ISBN (Opsional)': '9786230304561',
-        'Judul Buku': '', // Kosong sengaja untuk demo Auto-fetch Google Books
-        'Pengarang': '',
-        'Penerbit': '',
-        'Kategori': 'AKTIVITAS',
-        'Lokasi Rak': 'Rak C-1',
-        'Jumlah Buku': 2,
-        'Sumber': 'BOS',
+        'ISBN (Opsional)': '9786237171447',
+        'Judul Buku': 'Bendi dan Dompu',
+        'Pengarang': 'Yovita Siswati',
+        'Penerbit': 'ASTA Ilmu Publishing',
+        'Tahun Terbit': '2020',
+        'Kategori': 'DONGENG',
+        'Posisi Rak': 'Rak Kuning B (Dongeng & Fabel) - Baris 2',
+        'Jumlah Eksemplar': 3,
+        'Halaman Buku': 24,
+        'Format Fisik': 'Cerita Bergambar',
+        'Sinopsis Singkat': 'Kisah persahabatan Bendi (sebuah kereta) dan Dompu (seekor kuda) yang saling membantu.',
+        'Bahasa Buku': 'Indonesia',
+        'Sumber Perolehan': 'BOS',
+        'Nilai Buku (Rp)': 38000,
       },
       {
         'ISBN (Opsional)': '',
         'Judul Buku': 'Mengenal Adab Makan & Berdoa Bersama Mimi',
         'Pengarang': 'Bunda Hani',
         'Penerbit': 'Mizan Kids',
+        'Tahun Terbit': '2024',
         'Kategori': 'KARAKTER',
-        'Lokasi Rak': 'Rak D-1',
-        'Jumlah Buku': 4,
-        'Sumber': 'BELI',
+        'Posisi Rak': 'Rak Merah D (Karakter & Akhlak) - Baris 1',
+        'Jumlah Eksemplar': 4,
+        'Halaman Buku': 24,
+        'Format Fisik': 'Boardbook Balita',
+        'Sinopsis Singkat': 'Belajar adab makan dengan tangan kanan dan berdoa bersama ananda.',
+        'Bahasa Buku': 'Indonesia',
+        'Sumber Perolehan': 'SUMBANGAN',
+        'Nilai Buku (Rp)': 48000,
       },
     ];
 
@@ -93,10 +117,16 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
       { wch: 45 }, // Judul
       { wch: 22 }, // Pengarang
       { wch: 25 }, // Penerbit
+      { wch: 12 }, // Tahun
       { wch: 14 }, // Kategori
-      { wch: 14 }, // Rak
-      { wch: 12 }, // Jumlah
-      { wch: 12 }, // Sumber
+      { wch: 32 }, // Posisi Rak
+      { wch: 16 }, // Jumlah
+      { wch: 14 }, // Halaman
+      { wch: 20 }, // Format Fisik
+      { wch: 45 }, // Sinopsis
+      { wch: 14 }, // Bahasa
+      { wch: 16 }, // Sumber
+      { wch: 15 }, // Nilai Buku
     ];
 
     const wb = XLSX.utils.book_new();
@@ -139,15 +169,24 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
         let title = String(row['Judul Buku'] || row['Judul'] || '').trim();
         let author = String(row['Pengarang'] || row['Penulis'] || '').trim();
         let publisher = String(row['Penerbit'] || '').trim();
+        let year = String(row['Tahun Terbit'] || row['Tahun'] || '2024').trim();
         let catCode = String(row['Kategori'] || 'DONGENG').toUpperCase().trim();
-        let count = parseInt(row['Jumlah Buku'] || row['Jumlah'] || '1', 10) || 1;
-        let source = String(row['Sumber'] || 'BELI').toUpperCase() as BookItem['source'];
+        let shelfLocation = String(row['Posisi Rak'] || row['Lokasi Rak'] || row['Rak'] || '').trim();
+        let count = parseInt(row['Jumlah Eksemplar'] || row['Jumlah Buku'] || row['Jumlah'] || '1', 10) || 1;
+        let rawSource = String(row['Sumber Perolehan'] || row['Sumber'] || 'BELI').toUpperCase().trim();
+        let pageCount = parseInt(row['Halaman Buku'] || row['Halaman'] || '0', 10) || undefined;
+        let physicalFormat = String(row['Format Fisik'] || 'Cerita Bergambar').trim();
+        let synopsis = String(row['Sinopsis Singkat'] || row['Sinopsis'] || '').trim();
+        let bookLanguage = String(row['Bahasa Buku'] || row['Bahasa'] || 'id').toLowerCase().trim();
+        let priceValue = parseInt(row['Nilai Buku (Rp)'] || row['Nilai Buku'] || row['Harga'] || '45000', 10) || 45000;
 
         // Map category string to CategoryId
         let categoryId: CategoryId = 'cat-dongeng';
         if (catCode.includes('ALAM') || catCode.includes('SAINS')) categoryId = 'cat-alam';
         else if (catCode.includes('AKTIVITAS') || catCode.includes('BACA') || catCode.includes('HITUNG')) categoryId = 'cat-aktivitas';
         else if (catCode.includes('KARAKTER') || catCode.includes('AGAMA') || catCode.includes('BUDI')) categoryId = 'cat-karakter';
+        else if (catCode.includes('ENSIKLOPEDIA') || catCode.includes('IPTEK')) categoryId = 'cat-ensiklopedia';
+        else if (catCode.includes('BAHASA') || catCode.includes('MANDARIN') || catCode.includes('ENGLISH')) categoryId = 'cat-bahasa';
 
         // Auto-fetch via Google Books if title is empty but ISBN exists
         if (!title && isbn) {
@@ -161,6 +200,9 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
               title = info.title || `Buku ISBN ${isbn}`;
               author = info.authors ? info.authors.join(', ') : author || 'Penulis Buku';
               publisher = info.publisher || publisher || 'Penerbit';
+              if (info.publishedDate) year = info.publishedDate.substring(0, 4);
+              if (info.description) synopsis = info.description.replace(/<[^>]*>/g, '').trim();
+              if (info.pageCount) pageCount = info.pageCount;
             }
           } catch (e) {
             console.warn('Google Books fallback error:', e);
@@ -171,6 +213,11 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
           title = isbn ? `Buku Tanpa Judul (${isbn})` : `Buku SBTH Baru Baris ${i + 1}`;
         }
 
+        let acquisitionSource: any = 'BELI_SEKOLAH';
+        if (rawSource.includes('ORTU') || rawSource.includes('SUMBANGAN') || rawSource === 'S') acquisitionSource = 'SUMBANGAN_ORTU';
+        else if (rawSource.includes('DINAS') || rawSource.includes('HIBAH') || rawSource === 'H') acquisitionSource = 'HIBAH_DINAS';
+        else if (rawSource.includes('BOS') || rawSource.includes('PROYEK') || rawSource === 'PR') acquisitionSource = 'BOS';
+
         // Add to storage
         const { newItems } = libraryStore.addBook(
           {
@@ -178,14 +225,20 @@ export const ExcelModuleModal: React.FC<ExcelModuleModalProps> = ({
             title,
             author: author || 'Tim Guru SBTH',
             publisher: publisher || 'Penerbit SBTH',
-            publicationYear: '2024',
+            publicationYear: year || '2024',
             categoryId,
             ageGroup: 'TK_A',
-            synopsis: `Buku impor dari batch Excel perpustakaan SBTH TK.`,
+            shelfLocation: shelfLocation || undefined,
+            pageCount,
+            physicalFormat,
+            bookLanguage,
+            synopsis: synopsis || `Buku impor dari batch Excel perpustakaan SBTH TK.`,
             coverImage: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&q=80',
           },
           count,
-          ['BELI', 'HIBAH_ORTU', 'BOS', 'YAYASAN'].includes(source) ? source : 'BELI'
+          acquisitionSource,
+          undefined,
+          priceValue
         );
 
         newItems.forEach((it) => allNewBarcodes.push(it.itemBarcode));

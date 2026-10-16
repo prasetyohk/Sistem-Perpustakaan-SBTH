@@ -30,6 +30,9 @@ import {
   Table as TableIcon,
   ClipboardCheck,
   Download,
+  CheckSquare,
+  Square,
+  BookOpen,
 } from 'lucide-react';
 import { Book, BookItem, BookStatus, CategoryId, Language, ShelfLocationItem, Category } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
@@ -59,13 +62,45 @@ export const BookManagement: React.FC<BookManagementProps> = ({
 
   const [search, setSearch] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'ALL'>('ALL');
+  const [mainTab, setMainTab] = useState<'CATALOG' | 'UNPRINTED' | 'DISPOSED'>('CATALOG');
+  const [isBastModalOpen, setIsBastModalOpen] = useState<boolean>(false);
   const [labelFilter, setLabelFilter] = useState<'ALL' | 'UNPRINTED' | 'PRINTED'>('ALL');
+  const [shelfFilter, setShelfFilter] = useState<string>('ALL');
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [bulkShelfTarget, setBulkShelfTarget] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'BORROWED' | 'DAMAGED' | 'LOST' | 'DISPOSED'>('ALL');
   const [sortBy, setSortBy] = useState<'TITLE' | 'NEWEST' | 'COPIES'>('NEWEST');
   const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE' | 'GRID'>('CARDS');
   const [selectedBookForCopies, setSelectedBookForCopies] = useState<Book | null>(null);
-  const [newCopiesCount, setNewCopiesCount] = useState<number>(3);
+  const [newCopiesCount, setNewCopiesCount] = useState<number>(1);
   const [expandedBookIds, setExpandedBookIds] = useState<Record<string, boolean>>({});
+
+  // Restore saved tab & view mode
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('sbth_books_maintab') as any;
+      if (savedTab && ['CATALOG', 'UNPRINTED', 'DISPOSED'].includes(savedTab)) {
+        setMainTab(savedTab);
+      }
+      const savedView = localStorage.getItem('sbth_books_viewmode') as any;
+      if (savedView && ['CARDS', 'TABLE', 'GRID'].includes(savedView)) {
+        setViewMode(savedView);
+      }
+    }
+  }, []);
+
+  // Persist tab & view mode
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sbth_books_maintab', mainTab);
+    }
+  }, [mainTab]);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sbth_books_viewmode', viewMode);
+    }
+  }, [viewMode]);
 
   // Modals state
   const [selectedBookForEdit, setSelectedBookForEdit] = useState<Book | null>(null);
@@ -102,6 +137,69 @@ export const BookManagement: React.FC<BookManagementProps> = ({
   const unprintedCount = unprintedCopies.length;
   const printedCount = allItems.filter((i) => i.labelPrinted).length;
 
+  // Disposed / weeded counts
+  const disposedItems = allItems.filter((i) => i.status === 'DISPOSED');
+  const disposedCount = disposedItems.length;
+
+  // Extract all unique shelf locations for filter and bulk mover
+  const uniqueShelves = React.useMemo(() => {
+    const set = new Set<string>();
+    shelves.forEach((s) => {
+      if (s.name) set.add(s.name);
+      for (let r = 1; r <= 4; r++) {
+        set.add(`${s.name} - Baris ${r}`);
+      }
+    });
+    categories.forEach((c) => {
+      if (c.shelfLocation) set.add(c.shelfLocation);
+    });
+    allItems.forEach((i) => {
+      if (i.shelfLocation) set.add(i.shelfLocation);
+    });
+    books.forEach((b) => {
+      if (b.shelfLocation) set.add(b.shelfLocation);
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [shelves, categories, allItems, books, refreshTick]);
+
+  const toggleSelectItem = (idOrBarcode: string) => {
+    setSelectedItemIds((prev) =>
+      prev.includes(idOrBarcode) ? prev.filter((x) => x !== idOrBarcode) : [...prev, idOrBarcode]
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    const allIds = filteredBooks.flatMap((b) => allItems.filter((i) => i.bookId === b.id).map((i) => i.id));
+    if (selectedItemIds.length === allIds.length && allIds.length > 0) {
+      setSelectedItemIds([]);
+    } else {
+      setSelectedItemIds(allIds);
+    }
+    soundFx.playScanBeep();
+  };
+
+  const handleResetSelection = () => {
+    setSelectedItemIds([]);
+    soundFx.playScanBeep();
+  };
+
+  const handleApplyBulkShelf = () => {
+    if (!bulkShelfTarget.trim()) {
+      alert('Pilih lokasi rak tujuan terlebih dahulu.');
+      return;
+    }
+    if (selectedItemIds.length === 0) {
+      alert('Tidak ada eksemplar yang dipilih.');
+      return;
+    }
+
+    const updated = libraryStore.bulkUpdateShelfLocation(selectedItemIds, bulkShelfTarget.trim());
+    soundFx.playSuccessChime();
+    alert(`✓ Berhasil memindahkan ${updated} eksemplar fisik ke ${bulkShelfTarget}!`);
+    setSelectedItemIds([]);
+    setRefreshTick((r) => r + 1);
+  };
+
   const filteredBooks = books
     .filter((b) => {
       if (selectedCategory !== 'ALL' && b.categoryId !== selectedCategory) return false;
@@ -111,6 +209,14 @@ export const BookManagement: React.FC<BookManagementProps> = ({
         const bookCopies = allItems.filter((i) => i.bookId === b.id);
         if (labelFilter === 'UNPRINTED' && !bookCopies.some((i) => !i.labelPrinted)) return false;
         if (labelFilter === 'PRINTED' && !bookCopies.some((i) => i.labelPrinted)) return false;
+      }
+
+      // Shelf location filter
+      if (shelfFilter !== 'ALL') {
+        const bookCopies = allItems.filter((i) => i.bookId === b.id);
+        const matchBook = b.shelfLocation === shelfFilter;
+        const matchCopy = bookCopies.some((i) => i.shelfLocation === shelfFilter);
+        if (!matchBook && !matchCopy) return false;
       }
 
       // Physical copy status filter (Tersedia, Dipinjam, Rusak, Hilang, Dimusnahkan)
@@ -151,12 +257,15 @@ export const BookManagement: React.FC<BookManagementProps> = ({
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
 
+  const allFilteredItemIds = filteredBooks.flatMap((b) => allItems.filter((i) => i.bookId === b.id).map((i) => i.id));
+
   const handleAddCopies = () => {
     if (!selectedBookForCopies) return;
     const added = libraryStore.addCopiesToBook(selectedBookForCopies.id, newCopiesCount, 'BELI');
     soundFx.playSuccessChime();
     alert(`Berhasil menambahkan ${added.length} eksemplar fisik baru untuk "${selectedBookForCopies.title}".`);
     setSelectedBookForCopies(null);
+    setNewCopiesCount(1);
   };
 
   const handleOpenStatusModal = (item: BookItem) => {
@@ -176,15 +285,31 @@ export const BookManagement: React.FC<BookManagementProps> = ({
       return;
     }
 
+    const currentLib = libraryStore.getCurrentLibrarian();
     libraryStore.updateItemStatus(
       selectedItemForStatus.id,
       statusInput,
       conditionNoteInput.trim() || undefined,
-      statusInput === 'DISPOSED' ? disposalReasonInput.trim() : undefined
+      statusInput === 'DISPOSED' ? disposalReasonInput.trim() : undefined,
+      currentLib?.name
     );
 
     soundFx.playSuccessChime();
     setSelectedItemForStatus(null);
+    setRefreshTick((r) => r + 1);
+  };
+
+  const handleRestoreItem = (item: BookItem) => {
+    const book = books.find((b) => b.id === item.bookId);
+    const confirmRestore = confirm(
+      `Pulihkan eksemplar [${item.itemBarcode}] untuk buku "${book?.title || '-'}" kembali ke status TERSEDIA?\n\nEksemplar ini akan kembali aktif dan dapat dipinjam oleh siswa.`
+    );
+    if (!confirmRestore) return;
+
+    const currentLib = libraryStore.getCurrentLibrarian();
+    libraryStore.restoreItemFromDisposed(item.id, currentLib?.name);
+    soundFx.playSuccessChime();
+    setRefreshTick((r) => r + 1);
   };
 
   return (
@@ -257,11 +382,11 @@ export const BookManagement: React.FC<BookManagementProps> = ({
             <button
               type="button"
               onClick={() => {
-                libraryStore.exportSlimsCsv();
+                libraryStore.downloadSlimsCsv();
                 soundFx.playSuccessChime();
               }}
               className="flex-1 sm:flex-initial px-3 py-2 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-              title="Ekspor Seluruh Katalog & Eksemplar ke Format CSV Standar SLiMS (Senayan)"
+              title="Ekspor Seluruh Katalog & Eksemplar ke Format CSV Standar SLiMS (Senayan) Langsung Unduh"
             >
               <Download className="h-4 w-4 text-emerald-500" />
               <span>Ekspor SLiMS</span>
@@ -270,8 +395,59 @@ export const BookManagement: React.FC<BookManagementProps> = ({
         }
       />
 
+      {/* Sub-Tabs Navigasi: Katalog Aktif | Belum Cetak Label | Pemusnahan Buku */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab('CATALOG');
+            setLabelFilter('ALL');
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+            mainTab === 'CATALOG'
+              ? 'bg-amber-500 text-slate-950 shadow-xs'
+              : 'bg-surface hover:bg-surface-2 text-text-muted hover:text-text border border-border'
+          }`}
+        >
+          <BookOpen className="h-4 w-4" />
+          <span>Katalog Koleksi Aktif ({books.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab('UNPRINTED');
+            setLabelFilter('UNPRINTED');
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+            mainTab === 'UNPRINTED'
+              ? 'bg-amber-500 text-slate-950 shadow-xs'
+              : 'bg-surface hover:bg-surface-2 text-text-muted hover:text-text border border-border'
+          }`}
+        >
+          <Tag className="h-4 w-4 text-amber-500" />
+          <span>Belum Cetak Label ({unprintedCount})</span>
+          {unprintedCount > 0 && (
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('DISPOSED')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+            mainTab === 'DISPOSED'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'bg-surface hover:bg-surface-2 text-text-muted hover:text-text border border-border'
+          }`}
+        >
+          <Trash2 className="h-4 w-4 text-rose-500" />
+          <span>Pemusnahan Buku / Afkir ({disposedCount})</span>
+        </button>
+      </div>
+
       {/* Unprinted Label Sticker Warning Banner */}
-      {unprintedCount > 0 && (
+      {unprintedCount > 0 && mainTab !== 'DISPOSED' && (
         <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
           <div className="flex items-center gap-2.5 text-amber-500 font-semibold">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -300,8 +476,149 @@ export const BookManagement: React.FC<BookManagementProps> = ({
         </div>
       )}
 
-      {/* 2. Toolbar: Search on left + Segmented Category Chips + View & Sort Toggles */}
-      <div className="rounded-2xl bg-surface border border-border p-3.5 space-y-3 shadow-xs">
+      {mainTab === 'DISPOSED' ? (
+        <div className="space-y-4 animate-in fade-in duration-150">
+          {/* Pemusnahan Buku Header */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-rose-500/30 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-rose-500/15 text-rose-500">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-text flex items-center gap-2">
+                    Daftar Pemusnahan & Afkir Koleksi Buku (Weeding)
+                    <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-500 font-mono text-xs font-bold border border-rose-500/30">
+                      {disposedCount} Eksemplar
+                    </span>
+                  </h3>
+                  <p className="text-xs text-text-muted">
+                    Eksemplar fisik yang dikeluarkan dari peredaran sekolah karena rusak berat, hilang permanen, atau kadaluarsa kurikulum.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-stretch md:self-auto">
+              <button
+                type="button"
+                disabled={disposedCount === 0}
+                onClick={() => setIsBastModalOpen(true)}
+                className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm shadow-rose-600/30 transition cursor-pointer"
+                title="Cetak Berita Acara Pemusnahan Koleksi Pustaka Resmi"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Cetak Berita Acara (BAST)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table / List */}
+          {disposedCount === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-surface border border-border space-y-3">
+              <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
+                <CheckCircle className="h-7 w-7" />
+              </div>
+              <h4 className="text-sm font-bold text-text">Belum Ada Buku yang Dimusnahkan</h4>
+              <p className="text-xs text-text-muted max-w-md mx-auto">
+                Seluruh eksemplar koleksi fisik perpustakaan dalam kondisi baik atau masih dalam sirkulasi aktif. Jika ada buku yang rusak parah atau hilang permanen, ubah status eksemplar menjadi &quot;Dimusnahkan&quot; di menu katalog buku.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface-2 text-text-muted border-b border-border font-semibold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-3 px-4 w-10">No</th>
+                      <th className="py-3 px-4">Judul & Eksemplar Buku</th>
+                      <th className="py-3 px-3">Kategori & Panggil</th>
+                      <th className="py-3 px-3">Tgl Pemusnahan</th>
+                      <th className="py-3 px-3">Alasan Pemusnahan / BA</th>
+                      <th className="py-3 px-3">Petugas</th>
+                      <th className="py-3 px-4 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {disposedItems.map((item, idx) => {
+                      const book = books.find((b) => b.id === item.bookId);
+                      const cat = categories.find((c) => c.id === book?.categoryId) || CATEGORIES[0];
+                      return (
+                        <tr key={item.id} className="hover:bg-surface-2/40 transition">
+                          <td className="py-3 px-4 font-mono text-[11px] text-text-muted">{idx + 1}.</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-12 w-9 rounded-lg overflow-hidden shrink-0 border border-border bg-surface-2">
+                                <SmartBookCover
+                                  title={book?.title || 'Buku'}
+                                  author={book?.author || ''}
+                                  coverUrl={book?.coverImage}
+                                  categoryId={book?.categoryId}
+                                  className="h-full w-full object-cover text-[8px]"
+                                />
+                              </div>
+                              <div>
+                                <div
+                                  className="font-bold text-text hover:text-amber-500 transition cursor-pointer"
+                                  onClick={() => book && setSelectedBookForEdit(book)}
+                                >
+                                  {book?.title || 'Judul Tidak Diketahui'}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                  <span className="font-mono text-[10px] font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                                    {item.itemBarcode}
+                                  </span>
+                                  <span className="text-[10px] text-text-muted">Copy #{item.copyNumber}</span>
+                                  <span className="text-[10px] text-text-muted">• {book?.author || '-'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1"
+                              style={{ backgroundColor: `${cat.colorHex}20`, color: cat.colorHex }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cat.colorHex }} />
+                              {cat.shortName}
+                            </span>
+                            <div className="font-mono text-[10px] text-text-muted mt-1">{book?.callNumber || '-'}</div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap text-text font-medium text-[11px]">
+                            {item.disposedAt || item.statusUpdatedAt || '-'}
+                          </td>
+                          <td className="py-3 px-3 max-w-xs">
+                            <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-medium text-[11px]">
+                              {item.disposalReason || item.conditionNote || 'Koleksi Rusak Berat / Afkir'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap text-text-muted text-[11px]">
+                            {item.disposedBy || 'Pustakawan SBTH'}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreItem(item)}
+                              className="px-3 py-1.5 rounded-xl border border-border bg-surface hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:border-emerald-500/40 text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer"
+                              title="Batalkan pemusnahan dan kembalikan eksemplar ini ke status TERSEDIA"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              <span>Pulihkan Eksemplar</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* 2. Toolbar: Search on left + Segmented Category Chips + View & Sort Toggles */}
+          <div className="rounded-2xl bg-surface border border-border p-3.5 space-y-3 shadow-xs">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-3 h-4 w-4 text-text-muted" />
@@ -333,6 +650,26 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                 <option value="PRINTED" className="bg-surface text-text">
                   {t.labelPrinted || 'Sudah Ditempel Label'} ({printedCount})
                 </option>
+              </select>
+            </div>
+
+            {/* Shelf Location Filter */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
+              <Layers className="h-3.5 w-3.5 text-amber-500" />
+              <select
+                value={shelfFilter}
+                onChange={(e) => setShelfFilter(e.target.value)}
+                className="bg-transparent border-none outline-hidden text-xs text-text cursor-pointer font-medium max-w-[150px] truncate"
+                title="Filter berdasarkan lokasi rak fisik buku"
+              >
+                <option value="ALL" className="bg-surface text-text">
+                  📍 Semua Rak Fisik
+                </option>
+                {uniqueShelves.map((sh) => (
+                  <option key={sh} value={sh} className="bg-surface text-text">
+                    {sh}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -452,6 +789,73 @@ export const BookManagement: React.FC<BookManagementProps> = ({
         </div>
       </div>
 
+      {/* 2b. Bulk Edit Shelf Action Bar (Edit Massal Posisi Rak) */}
+      <div className="rounded-2xl bg-surface border border-border p-3.5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleSelectAllVisible}
+            className="px-3 py-1.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-border text-xs font-semibold text-text flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <CheckSquare className="h-4 w-4 text-amber-500" />
+            <span>Pilih Semua ({allFilteredItemIds.length} Eksemplar)</span>
+          </button>
+
+          {selectedItemIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleResetSelection}
+              className="px-3 py-1.5 rounded-xl bg-surface-2 hover:bg-rose-500/10 text-rose-500 border border-border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Reset Pilihan ({selectedItemIds.length})</span>
+            </button>
+          )}
+
+          <div className="text-xs text-text-muted">
+            {selectedItemIds.length > 0 ? (
+              <span className="text-amber-500 font-bold">
+                ✓ {selectedItemIds.length} eksemplar terpilih untuk edit massal
+              </span>
+            ) : (
+              <span>Centang eksemplar atau buku untuk memindahkan rak secara massal</span>
+            )}
+          </div>
+        </div>
+
+        {selectedItemIds.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-text whitespace-nowrap">Pindah ke:</span>
+            <select
+              value={bulkShelfTarget}
+              onChange={(e) => setBulkShelfTarget(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs text-text font-semibold outline-hidden cursor-pointer max-w-[210px] truncate"
+            >
+              <option value="" className="bg-surface text-text">-- Pilih Posisi Rak --</option>
+              {shelves.map((sh) => (
+                <option key={sh.id} value={`${sh.name} - Baris 1`} className="bg-surface text-text">
+                  {sh.name} - Baris 1 ({sh.categoryName})
+                </option>
+              ))}
+              {uniqueShelves.map((sh) => (
+                <option key={sh} value={sh} className="bg-surface text-text">
+                  {sh}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!bulkShelfTarget}
+              onClick={handleApplyBulkShelf}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+            >
+              <Check className="h-4 w-4" />
+              <span>Terapkan ({selectedItemIds.length})</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 3. Book List Cards / Table / Grid */}
       {viewMode === 'TABLE' ? (
         <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-xs">
@@ -459,6 +863,16 @@ export const BookManagement: React.FC<BookManagementProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-surface-2 text-text-muted border-b border-border font-semibold uppercase tracking-wider text-[10px]">
                 <tr>
+                  <th className="py-3 px-3 w-8 text-center">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllVisible}
+                      title="Pilih / Batalkan Semua"
+                      className="text-text-muted hover:text-amber-500"
+                    >
+                      <CheckSquare className="h-4 w-4" />
+                    </button>
+                  </th>
                   <th className="py-3 px-4">No & Judul Buku</th>
                   <th className="py-3 px-3">Kategori</th>
                   <th className="py-3 px-3">ISBN & Eksemplar</th>
@@ -471,6 +885,9 @@ export const BookManagement: React.FC<BookManagementProps> = ({
               <tbody className="divide-y divide-border">
                 {filteredBooks.map((book, idx) => {
                   const items = allItems.filter((i) => i.bookId === book.id);
+                  const bookItemIds = items.map((i) => i.id);
+                  const allBookItemsSelected = bookItemIds.length > 0 && bookItemIds.every((id) => selectedItemIds.includes(id));
+                  const someBookItemsSelected = bookItemIds.some((id) => selectedItemIds.includes(id));
                   const available = items.filter((i) => i.status === 'AVAILABLE').length;
                   const borrowed = items.filter((i) => i.status === 'BORROWED').length;
                   const inRepair = items.filter((i) => i.status === 'IN_REPAIR').length;
@@ -481,6 +898,28 @@ export const BookManagement: React.FC<BookManagementProps> = ({
 
                   return (
                     <tr key={book.id} className="hover:bg-surface-2/50 transition">
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (allBookItemsSelected) {
+                              setSelectedItemIds((prev) => prev.filter((id) => !bookItemIds.includes(id)));
+                            } else {
+                              setSelectedItemIds((prev) => Array.from(new Set([...prev, ...bookItemIds])));
+                            }
+                          }}
+                          className="p-1 rounded-md hover:bg-surface-3 transition"
+                          title="Pilih seluruh eksemplar buku ini"
+                        >
+                          {allBookItemsSelected ? (
+                            <CheckSquare className="h-4 w-4 text-amber-500" />
+                          ) : someBookItemsSelected ? (
+                            <div className="h-4 w-4 rounded border-2 border-amber-500 bg-amber-500/20 flex items-center justify-center text-[10px] text-amber-500 font-bold leading-none">-</div>
+                          ) : (
+                            <Square className="h-4 w-4 text-text-muted hover:text-text" />
+                          )}
+                        </button>
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-[11px] text-text-muted w-5 shrink-0">{idx + 1}.</span>
@@ -576,7 +1015,10 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSelectedBookForCopies(book)}
+                            onClick={() => {
+                              setNewCopiesCount(1);
+                              setSelectedBookForCopies(book);
+                            }}
                             className="p-1.5 rounded-lg border border-border hover:bg-surface-2 text-emerald-500 transition cursor-pointer"
                             title="Tambah Eksemplar"
                           >
@@ -612,6 +1054,9 @@ export const BookManagement: React.FC<BookManagementProps> = ({
             const unprintedInBook = items.filter((i) => !i.labelPrinted).length;
             const cat = categories.find((c) => c.id === book.categoryId) || CATEGORIES[0];
             const expanded = isBookExpanded(book.id);
+            const bookItemIds = items.map((i) => i.id);
+            const allBookItemsSelected = bookItemIds.length > 0 && bookItemIds.every((id) => selectedItemIds.includes(id));
+            const someBookItemsSelected = bookItemIds.some((id) => selectedItemIds.includes(id));
 
             return (
               <div
@@ -621,6 +1066,28 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                 {/* Card Header: Cover (56x75) | Info | Badges & Actions */}
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                   <div className="flex items-start gap-3.5">
+                    {/* Book-level Checkbox for Bulk Shelf Assign */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (allBookItemsSelected) {
+                          setSelectedItemIds((prev) => prev.filter((id) => !bookItemIds.includes(id)));
+                        } else {
+                          setSelectedItemIds((prev) => Array.from(new Set([...prev, ...bookItemIds])));
+                        }
+                      }}
+                      className="p-1 rounded-md hover:bg-surface-2 transition self-center sm:self-start mt-1 cursor-pointer"
+                      title="Pilih seluruh eksemplar buku ini"
+                    >
+                      {allBookItemsSelected ? (
+                        <CheckSquare className="h-4 w-4 text-amber-500" />
+                      ) : someBookItemsSelected ? (
+                        <div className="h-4 w-4 rounded border-2 border-amber-500 bg-amber-500/20 flex items-center justify-center text-[10px] text-amber-500 font-bold leading-none">-</div>
+                      ) : (
+                        <Square className="h-4 w-4 text-text-muted hover:text-text" />
+                      )}
+                    </button>
+
                     <div className="h-[75px] w-[56px] rounded-lg overflow-hidden shrink-0 border border-border bg-surface-2 shadow-2xs">
                       <SmartBookCover
                         title={book.title}
@@ -734,7 +1201,10 @@ export const BookManagement: React.FC<BookManagementProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setSelectedBookForCopies(book)}
+                        onClick={() => {
+                          setNewCopiesCount(1);
+                          setSelectedBookForCopies(book);
+                        }}
                         className="px-3 py-1.5 rounded-lg border border-border bg-surface-2 hover:bg-surface text-text text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                         title="Tambah Eksemplar Fisik"
                       >
@@ -742,13 +1212,26 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                         <span>Eksemplar</span>
                       </button>
 
+                      {unprintedInBook > 0 && unprintedInBook < items.length && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenLabelPrinter(items.filter((i) => !i.labelPrinted).map((i) => i.itemBarcode))}
+                          className="px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                          title="Cetak stiker label untuk salinan baru saja (tidak cetak ulang eksemplar lama)"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          <span>Cetak Label Baru ({unprintedInBook})</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => onOpenLabelPrinter(items.map((i) => i.itemBarcode))}
                         className="px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-2 text-text text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+                        title="Cetak label untuk semua eksemplar judul buku ini"
                       >
                         <Printer className="h-3.5 w-3.5 text-text-muted" />
-                        <span>Cetak Label ({items.length})</span>
+                        <span>Cetak Semua ({items.length})</span>
                       </button>
 
                       <button
@@ -800,20 +1283,54 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                           statusBadge = <span className="text-slate-400 font-bold">DIMUSNAHKAN</span>;
                         }
 
+                        const isItemSelected = selectedItemIds.includes(item.id);
+
                         return (
                           <div
                             key={item.id}
                             onClick={() => handleOpenStatusModal(item)}
-                            className={`p-2.5 rounded-xl bg-surface-2 border-0 border-l-[3px] ${borderClass} hover:ring-1 hover:ring-amber-500/50 cursor-pointer transition flex flex-col justify-between select-none shadow-2xs`}
+                            className={`p-2.5 rounded-xl bg-surface-2 border-0 border-l-[3px] ${borderClass} hover:ring-1 hover:ring-amber-500/50 cursor-pointer transition flex flex-col justify-between select-none shadow-2xs ${
+                              isItemSelected ? 'ring-2 ring-amber-500 bg-amber-500/10' : ''
+                            }`}
                             title="Klik untuk ubah kondisi (Buku Rusak, Perbaikan, Hilang, Dimusnahkan)"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-mono text-xs font-semibold text-text">
-                                {item.itemBarcode}
-                              </span>
-                              <span className="text-[10px] text-text-muted font-medium">
-                                #{item.copyNumber}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSelectItem(item.id);
+                                  }}
+                                  className="text-text-muted hover:text-amber-500 transition"
+                                  title="Pilih eksemplar ini untuk edit massal posisi rak"
+                                >
+                                  {isItemSelected ? (
+                                    <CheckSquare className="h-3.5 w-3.5 text-amber-500" />
+                                  ) : (
+                                    <Square className="h-3.5 w-3.5 text-text-muted hover:text-text" />
+                                  )}
+                                </button>
+                                <span className="font-mono text-xs font-semibold text-text">
+                                  {item.itemBarcode}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenLabelPrinter([item.itemBarcode]);
+                                  }}
+                                  className="p-1 rounded-md text-text-muted hover:text-amber-500 hover:bg-surface transition cursor-pointer"
+                                  title={`Cetak stiker label untuk eksemplar ini saja (${item.itemBarcode} - Copy #${item.copyNumber})`}
+                                >
+                                  <Printer className="h-3 w-3" />
+                                </button>
+                                <span className="text-[10px] text-text-muted font-medium">
+                                  #{item.copyNumber}
+                                </span>
+                              </div>
                             </div>
 
                             <div className="mt-1.5 flex items-center justify-between text-[10px]">
@@ -852,6 +1369,8 @@ export const BookManagement: React.FC<BookManagementProps> = ({
             );
           })}
         </div>
+      )}
+        </>
       )}
 
 
@@ -1082,6 +1601,137 @@ export const BookManagement: React.FC<BookManagementProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL BERITA ACARA PEMUSNAHAN BUKU (BAST) */}
+      {isBastModalOpen && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in">
+          <div className="relative w-full max-w-3xl rounded-3xl bg-white text-slate-900 shadow-2xl p-6 sm:p-8 my-8 border border-slate-200">
+            {/* Header controls (hidden when printing) */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 print:hidden">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-rose-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Pratinjau Berita Acara Pemusnahan Buku (BAST)
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Cetak Dokumen / Simpan PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBastModalOpen(false)}
+                  className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Sheet */}
+            <div className="pt-4 space-y-5 text-xs text-slate-800 leading-relaxed">
+              {/* Kop Surat Sekolah */}
+              <div className="text-center border-b-2 border-slate-900 pb-3">
+                <h2 className="text-base sm:text-lg font-bold tracking-wide uppercase">
+                  YAYASAN BINA TUNAS HARAPAN
+                </h2>
+                <h3 className="text-lg sm:text-xl font-extrabold text-amber-600 uppercase tracking-wider">
+                  TK BINA TUNAS HARAPAN (SBTH)
+                </h3>
+                <p className="text-xs text-slate-600">
+                  UNIT PERPUSTAKAAN SEKOLAH RAMAH ANAK • NSS/NPSN: 0021481092 / 20109921
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Jl. Bina Tunas Harapan No. 1, Kota SBTH • Email: perpustakaan@sbth.sch.id
+                </p>
+              </div>
+
+              {/* Judul Surat */}
+              <div className="text-center space-y-1">
+                <h4 className="text-sm sm:text-base font-bold uppercase underline">
+                  BERITA ACARA PEMUSNAHAN / WEEDING KOLEKSI PUSTAKA
+                </h4>
+                <p className="text-xs font-mono text-slate-600">
+                  Nomor: BAST-PUS/SBTH/{new Date().getFullYear()}/{String(new Date().getMonth() + 1).padStart(2, '0')}/001
+                </p>
+              </div>
+
+              {/* Pembuka */}
+              <p className="text-justify">
+                Pada hari ini, tanggal <strong>{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>, bertempat di Perpustakaan TK Bina Tunas Harapan, kami yang bertanda tangan di bawah ini telah melakukan pemeriksaan fisik, verifikasi administrasi, dan pemusnahan (afkir/weeding) terhadap eksemplar koleksi buku perpustakaan yang dinyatakan rusak berat, hilang permanen, atau kadaluarsa kurikulum:
+              </p>
+
+              {/* Tabel Daftar Buku */}
+              <div className="border border-slate-300 rounded-lg overflow-hidden">
+                <table className="w-full text-left text-[11px]">
+                  <thead className="bg-slate-100 border-b border-slate-300 font-bold">
+                    <tr>
+                      <th className="py-2 px-2.5 w-8">No</th>
+                      <th className="py-2 px-2.5">Barcode & Copy</th>
+                      <th className="py-2 px-2.5">Judul Buku & Pengarang</th>
+                      <th className="py-2 px-2.5">No. Panggil</th>
+                      <th className="py-2 px-2.5">Alasan Pemusnahan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {disposedItems.map((item, idx) => {
+                      const b = books.find((x) => x.id === item.bookId);
+                      return (
+                        <tr key={item.id}>
+                          <td className="py-1.5 px-2.5 font-mono">{idx + 1}.</td>
+                          <td className="py-1.5 px-2.5 font-mono font-bold">
+                            {item.itemBarcode} (#{item.copyNumber})
+                          </td>
+                          <td className="py-1.5 px-2.5">
+                            <strong>{b?.title || 'Judul Buku'}</strong> - {b?.author || '-'}
+                          </td>
+                          <td className="py-1.5 px-2.5 font-mono text-[10px]">
+                            {b?.callNumber || '-'}
+                          </td>
+                          <td className="py-1.5 px-2.5 italic text-rose-700">
+                            {item.disposalReason || item.conditionNote || 'Rusak Berat / Afkir'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-[11px] text-slate-600">
+                Total eksemplar yang dimusnahkan: <strong>{disposedCount} eksemplar</strong>. Buku-buku tersebut di atas telah dikeluarkan dari sirkulasi aktif perpustakaan dan nilainya disesuaikan pada laporan inventaris aset sekolah.
+              </p>
+
+              {/* Tanda Tangan Tiga Pihak */}
+              <div className="pt-8 grid grid-cols-3 gap-4 text-center text-xs">
+                <div>
+                  <p className="text-slate-600">Petugas / Pustakawan,</p>
+                  <div className="h-16 flex items-end justify-center font-bold">
+                    ({libraryStore.getCurrentLibrarian()?.name || 'Pustakawan SBTH'})
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-600">Kepala Perpustakaan,</p>
+                  <div className="h-16 flex items-end justify-center font-bold">
+                    (Ibu Siti Rahma, S.Pd)
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-600">Mengetahui,<br />Kepala Sekolah TK SBTH</p>
+                  <div className="h-14 flex items-end justify-center font-bold">
+                    (Ibu Maria Ulfah, M.Pd)
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

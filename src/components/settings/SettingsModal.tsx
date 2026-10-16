@@ -32,6 +32,8 @@ import {
   BookmarkCheck,
   HelpCircle,
   Megaphone,
+  Keyboard,
+  RotateCcw,
 } from 'lucide-react';
 import {
   SchoolProfile,
@@ -45,6 +47,7 @@ import {
   MemberTypeRule,
   SlimsPatternConfig,
   LibraryNewsArticle,
+  KeyboardShortcutConfig,
 } from '@/types';
 import { libraryStore } from '@/lib/storage';
 import { soundFx } from '@/lib/sound';
@@ -62,7 +65,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onProfileUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'SCHOOL' | 'LOAN_RULES' | 'SLIMS_CONFIG' | 'CMS_NEWS' | 'LIBRARIANS' | 'CATEGORIES' | 'REMINDERS'
+    'SCHOOL' | 'LOAN_RULES' | 'SLIMS_CONFIG' | 'CMS_NEWS' | 'LIBRARIANS' | 'CATEGORIES' | 'REMINDERS' | 'SHORTCUTS'
   >('SCHOOL');
   const [toastMessage, setToastMessage] = useState<string>('');
 
@@ -95,6 +98,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Loan Rules state
   const [loanRules, setLoanRules] = useState<LoanRules>(libraryStore.getLoanRules());
 
+  // Keyboard Shortcuts state
+  const [shortcuts, setShortcuts] = useState<KeyboardShortcutConfig>(libraryStore.getKeyboardShortcuts());
+
   // SLiMS Pattern Config state
   const [slimsPattern, setSlimsPattern] = useState<SlimsPatternConfig>(libraryStore.getSlimsPattern());
   const [hasBackup, setHasBackup] = useState<boolean>(false);
@@ -119,6 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSchedule(libraryStore.getReminderSchedule());
       setCategories(libraryStore.getCategories());
       setLoanRules(libraryStore.getLoanRules());
+      setShortcuts(libraryStore.getKeyboardShortcuts());
       setSlimsPattern(libraryStore.getSlimsPattern());
       setHasBackup(libraryStore.hasReindexBackup());
       setNewsList(libraryStore.getLibraryNews());
@@ -421,6 +428,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // --- KEYBOARD SHORTCUTS HANDLERS ---
+  const handleShortcutChange = (keyName: keyof KeyboardShortcutConfig, val: string) => {
+    setShortcuts((prev) => ({
+      ...prev,
+      [keyName]: val,
+    }));
+  };
+
+  const handleSaveShortcuts = () => {
+    libraryStore.saveKeyboardShortcuts(shortcuts);
+    soundFx.playSuccessChime();
+    showToast('✓ Shortcut keyboard berhasil disimpan!');
+  };
+
+  const handleResetShortcuts = () => {
+    if (confirm('Kembalikan semua shortcut ke pengaturan bawaan (default)?')) {
+      const def = libraryStore.resetKeyboardShortcuts();
+      setShortcuts(def);
+      soundFx.playSuccessChime();
+      showToast('✓ Shortcut keyboard dikembalikan ke default!');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in">
       <div className="relative w-full max-w-4xl bg-surface border-l border-border h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
@@ -475,6 +505,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               { id: 'LIBRARIANS', label: 'Pustakawan', icon: Users, desc: 'Akun & PIN Akses' },
               { id: 'CATEGORIES', label: 'Kategori Rak', icon: Tags, desc: 'Rak & Topik Buku' },
               { id: 'REMINDERS', label: 'Pengingat Rutin', icon: Bell, desc: 'Jadwal WA & Telegram' },
+              { id: 'SHORTCUTS', label: 'Shortcut Keyboard', icon: Keyboard, desc: 'Kustom Tombol Cepat (F1)' },
             ].map((nav) => {
               const Icon = nav.icon;
               const isActive = activeTab === nav.id;
@@ -723,6 +754,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[10px] text-text-muted/80">
                     💡 <em>Catatan:</em> Jika toggle ini dimatikan (OFF), tombol dan menu Kas & Denda akan disembunyikan sepenuhnya dari aplikasi agar operasional berjalan bebas tanpa sistem denda uang.
                   </p>
+                </div>
+
+                {/* Reset Data Mockup / Percobaan */}
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-rose-500 flex items-center gap-2">
+                      <Trash2 className="h-4 w-4" />
+                      <span>Reset Data Mockup / Percobaan (Mulai Data Riil)</span>
+                    </h4>
+                    <p className="text-[11px] text-text-muted mt-1 leading-relaxed">
+                      Jika Anda telah selesai menguji fitur aplikasi dan ingin mengosongkan seluruh data buku dummy/contoh agar dapat mulai memasukkan inventaris riil dari nol (atau melalui impor Excel), gunakan tombol di bawah ini. Profil sekolah dan akun staf tetap aman.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pin = prompt('Masukkan PIN Admin/Pustakawan (1234 atau sbth2026) untuk mengosongkan data dummy:');
+                      if (!pin) return;
+                      const res = libraryStore.clearMockupBooksAndLoans(pin);
+                      if (res.success) {
+                        soundFx.playSuccessChime();
+                        alert(res.message);
+                        window.location.reload();
+                      } else {
+                        soundFx.playErrorBeep();
+                        alert(res.message);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-xs shadow-rose-600/30"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Kosongkan Seluruh Buku Percobaan</span>
+                  </button>
                 </div>
 
                 <div className="pt-2">
@@ -1069,26 +1134,89 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Kebijakan Reservasi Buku */}
-                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-3">
+                {/* Kebijakan Reservasi Buku & Kuota Skenario Pinjaman */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-4">
                   <div className="flex items-start gap-3">
                     <div className="h-9 w-9 rounded-xl bg-purple-500/15 text-purple-500 border border-purple-500/30 flex items-center justify-center shrink-0">
                       <BookmarkCheck className="h-4 w-4" />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-xs font-bold text-text">
-                        Batas Waktu Pengambilan Buku Reservasi (Hold Expiry)
+                        Kebijakan Kuota Reservasi & Skenario Peminjaman Siswa
                       </h4>
                       <p className="text-[11px] text-text-muted mt-0.5">
-                        Ketika buku yang di-booking telah dikembalikan ke perpus, sistem mengunci buku tersebut agar tidak dipinjam siswa lain selama:
+                        Atur batas jumlah buku yang boleh direservasi siswa saat belum ada pinjaman vs saat masih ada pinjaman di rumah
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* 2 Skenario Kuota Reservasi */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    <div className="p-3.5 rounded-xl bg-surface border border-border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                          <span>🏠 Skenario A: Belum Ada Pinjaman</span>
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold">
+                          Bebas Pinjaman
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-text-muted leading-relaxed">
+                        Jika siswa saat ini belum meminjam buku apa pun di rumah, kuota buku yang boleh direservasi adalah:
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={loanRules.maxReservationsTotal ?? 2}
+                          onChange={(e) =>
+                            setLoanRules({
+                              ...loanRules,
+                              maxReservationsTotal: parseInt(e.target.value) || 1,
+                            })
+                          }
+                          className="w-24 h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text font-bold text-center"
+                        />
+                        <span className="text-xs font-semibold text-text">Buku Direservasi</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-surface border border-border space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-text flex items-center gap-1.5">
+                          <span>📚 Skenario B: Masih Ada Pinjaman</span>
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-bold">
+                          Sedang Pinjam
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-text-muted leading-relaxed">
+                        Jika siswa masih memegang buku di rumah, kuota reservasi dibatasi agar koleksi buku terbagi adil:
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          value={loanRules.maxReservationsWhenBorrowing ?? 1}
+                          onChange={(e) =>
+                            setLoanRules({
+                              ...loanRules,
+                              maxReservationsWhenBorrowing: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          className="w-24 h-10 rounded-xl border border-border bg-surface-2 px-3 text-xs text-text font-bold text-center"
+                        />
+                        <span className="text-xs font-semibold text-text">Buku Direservasi</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/60">
                     <div>
                       <label className="text-[11px] font-semibold text-text block mb-1">
-                        Masa Hold Reservasi:
+                        Batas Waktu Pengambilan (Hold Expiry):
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -1462,6 +1590,122 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Standar Kode Sumber Perolehan / Pengadaan Koleksi SLiMS */}
+                <div className="p-4 rounded-2xl bg-surface-2 border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tags className="h-4 w-4 text-emerald-500" />
+                      <h4 className="text-xs font-bold text-text">
+                        Standar Kode Sumber Perolehan Koleksi (Pengadaan Buku SLiMS)
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">
+                      Klasifikasi SLiMS 9
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-relaxed">
+                    Sesuai standar SLiMS (Senayan Library Management System) dan Perpustakaan Nasional RI, sumber perolehan buku diklasifikasikan dengan kode singkatan resmi. Klik tombol preset untuk langsung menerapkan awalan barcode:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+                    {/* 1. Beli Sendiri */}
+                    <div className="p-3 rounded-xl bg-surface border border-border flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-500 uppercase">1. Beli Sendiri</span>
+                          <span className="font-mono text-xs font-extrabold text-amber-500">BELI</span>
+                        </div>
+                        <p className="text-[10px] text-text-muted mt-1">
+                          Pengadaan mandiri via anggaran rutin / yayasan sekolah
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlimsPattern({ ...slimsPattern, prefix: 'SBTH-BELI-' });
+                          soundFx.playScanBeep();
+                          showToast('Prefix diubah ke: SBTH-BELI-');
+                        }}
+                        className="mt-2.5 px-2 py-1 rounded-lg bg-surface-2 hover:bg-amber-500/15 text-text hover:text-amber-500 border border-border text-[10px] font-bold transition text-center cursor-pointer"
+                      >
+                        Gunakan Prefix SBTH-BELI-
+                      </button>
+                    </div>
+
+                    {/* 2. Hibah BOS */}
+                    <div className="p-3 rounded-xl bg-surface border border-border flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-500 uppercase">2. Hibah Dana BOS</span>
+                          <span className="font-mono text-xs font-extrabold text-blue-500">BOS</span>
+                        </div>
+                        <p className="text-[10px] text-text-muted mt-1">
+                          Bantuan Operasional Sekolah / DAK Pendidikan Kemendikbud
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlimsPattern({ ...slimsPattern, prefix: 'SBTH-BOS-' });
+                          soundFx.playScanBeep();
+                          showToast('Prefix diubah ke: SBTH-BOS-');
+                        }}
+                        className="mt-2.5 px-2 py-1 rounded-lg bg-surface-2 hover:bg-blue-500/15 text-text hover:text-blue-500 border border-border text-[10px] font-bold transition text-center cursor-pointer"
+                      >
+                        Gunakan Prefix SBTH-BOS-
+                      </button>
+                    </div>
+
+                    {/* 3. Hibah Ortu Murid */}
+                    <div className="p-3 rounded-xl bg-surface border border-border flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-purple-500 uppercase">3. Hibah Orang Tua</span>
+                          <span className="font-mono text-xs font-extrabold text-purple-500">ORTU</span>
+                        </div>
+                        <p className="text-[10px] text-text-muted mt-1">
+                          Donasi sukarela orang tua murid, paguyuban kelas, atau alumni
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlimsPattern({ ...slimsPattern, prefix: 'SBTH-ORTU-' });
+                          soundFx.playScanBeep();
+                          showToast('Prefix diubah ke: SBTH-ORTU-');
+                        }}
+                        className="mt-2.5 px-2 py-1 rounded-lg bg-surface-2 hover:bg-purple-500/15 text-text hover:text-purple-500 border border-border text-[10px] font-bold transition text-center cursor-pointer"
+                      >
+                        Gunakan Prefix SBTH-ORTU-
+                      </button>
+                    </div>
+
+                    {/* 4. Bantuan Pemerintah / Dinas */}
+                    <div className="p-3 rounded-xl bg-surface border border-border flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase">4. Bantuan Lain / Dinas</span>
+                          <span className="font-mono text-xs font-extrabold text-emerald-500">DINAS</span>
+                        </div>
+                        <p className="text-[10px] text-text-muted mt-1">
+                          Dropping buku Dinas Perpustakaan, CSR, atau instansi lain
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlimsPattern({ ...slimsPattern, prefix: 'SBTH-DINAS-' });
+                          soundFx.playScanBeep();
+                          showToast('Prefix diubah ke: SBTH-DINAS-');
+                        }}
+                        className="mt-2.5 px-2 py-1 rounded-lg bg-surface-2 hover:bg-emerald-500/15 text-text hover:text-emerald-500 border border-border text-[10px] font-bold transition text-center cursor-pointer"
+                      >
+                        Gunakan Prefix SBTH-DINAS-
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </form>
             )}
 
@@ -1547,6 +1791,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SHORTCUT KEYBOARD PUSTAKAWAN */}
+            {activeTab === 'SHORTCUTS' && (
+              <div className="space-y-6 animate-in fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold font-display text-text flex items-center gap-2">
+                      <Keyboard className="h-4 w-4 text-amber-500" />
+                      <span>Kustomisasi Pintasan Keyboard (Shortcuts Mode Pustakawan)</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Atur tombol cepat keyboard untuk mempercepat navigasi dan operasional sirkulasi pustakawan
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetShortcuts}
+                      className="px-3.5 py-2 rounded-xl bg-surface-2 hover:bg-surface border border-border text-rose-500 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Reset ke Bawaan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveShortcuts}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      <span>Simpan Shortcut</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-center gap-2.5">
+                  <span className="text-base">💡</span>
+                  <p>
+                    Tombol pintasan hanya aktif saat berada di <strong>Mode Pustakawan</strong>. Tekan tombol <strong>F1</strong> kapan saja di layar pustakawan untuk membuka ringkasan panduan shortcut cepat.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[
+                    { key: 'newLoan' as const, label: 'Peminjaman Baru', desc: 'Sirkulasi: Buka tab Peminjaman Baru', defaultVal: 'Control+q' },
+                    { key: 'returnBook' as const, label: 'Pengembalian Kilat', desc: 'Sirkulasi: Buka tab Pengembalian Kilat 4-Langkah', defaultVal: 'Control+t' },
+                    { key: 'renewLoan' as const, label: 'Perpanjangan Pinjaman', desc: 'Sirkulasi: Buka tab Perpanjangan Pinjaman', defaultVal: 'Control+e' },
+                    { key: 'overdueTab' as const, label: 'Tagihan & Terlambat', desc: 'Sirkulasi: Buka tab Buku Terlambat', defaultVal: 'Control+r' },
+                    { key: 'booksTab' as const, label: 'Koleksi & Eksemplar Buku', desc: 'Buka tab Koleksi & Eksemplar Buku', defaultVal: 'Control+b' },
+                    { key: 'membersTab' as const, label: 'Data Anggota Siswa', desc: 'Buka tab Anggota & Data Siswa', defaultVal: 'Control+m' },
+                    { key: 'opacTab' as const, label: 'Katalog Visual Anak (OPAC)', desc: 'Buka Katalog Visual Anak (OPAC)', defaultVal: 'Control+k' },
+                    { key: 'settingsModal' as const, label: 'Pengaturan Sistem', desc: 'Buka Pengaturan Sistem Perpustakaan', defaultVal: 'Control+p' },
+                    { key: 'helpModal' as const, label: 'Panduan Pintasan Keyboard', desc: 'Tampilkan panduan tombol pintasan cepat', defaultVal: 'F1' },
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="p-4 rounded-2xl bg-surface border border-border shadow-2xs flex items-center justify-between gap-3"
+                    >
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold text-text">{item.label}</h4>
+                        <p className="text-[11px] text-text-muted mt-0.5">{item.desc}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <input
+                          type="text"
+                          value={shortcuts[item.key] || item.defaultVal}
+                          onChange={(e) => handleShortcutChange(item.key, e.target.value)}
+                          placeholder={item.defaultVal}
+                          className="w-28 h-9 rounded-lg border border-amber-500/50 bg-amber-500/10 text-center font-mono font-bold text-xs text-amber-400 outline-hidden focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local binaries and temporary artifacts
+*.msi
+test_*.png
+frame_from_first_video.png
+video_verified_color.png
+demo_videos/
+test_video/
+~$*

@@ -66,6 +66,7 @@ export interface BookItem {
   conditionNote: string;
   disposalReason?: string; // Catatan berita acara pemusnahan
   disposedAt?: string;     // YYYY-MM-DD
+  disposedBy?: string;     // Nama Pustakawan yang memusnahkan
   acquisitionDate: string; // YYYY-MM-DD
   createdAt?: string;      // YYYY-MM-DD
   source: AcquisitionSource;
@@ -322,8 +323,39 @@ export interface LoanRules {
   qrisNmid: string; // National Merchant ID
   qrisImageUrl: string; // URL gambar QRIS
   enableFinanceModule?: boolean; // Toggle kas & denda (bisa di ON/OFF)
+  maxReservationsTotal?: number; // Maksimal kuota reservasi total (default: 2)
+  maxReservationsWhenBorrowing?: number; // Maksimal kuota reservasi jika sedang meminjam buku (default: 1)
   lastStockOpnameDate?: string;
   lastStockOpnameSummary?: string;
+}
+
+export interface KeyboardShortcutItem {
+  id: string;
+  label: string;
+  key: string;
+  ctrlKey: boolean;
+  description: string;
+  action:
+    | 'NAV_BORROW'
+    | 'NAV_RETURN'
+    | 'NAV_BOOKS'
+    | 'NAV_EXTEND'
+    | 'NAV_MEMBERS'
+    | 'NAV_OPAC'
+    | 'OPEN_SETTINGS'
+    | 'HELP_SHORTCUTS';
+}
+
+export interface KeyboardShortcutConfig {
+  newLoan?: string;
+  returnBook?: string;
+  renewLoan?: string;
+  overdueTab?: string;
+  booksTab?: string;
+  membersTab?: string;
+  opacTab?: string;
+  settingsModal?: string;
+  helpModal?: string;
 }
 
 export interface StockOpnameRecord {

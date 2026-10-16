@@ -13,10 +13,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell; ^
    $desktop = [System.Environment]::GetFolderPath('Desktop'); ^
    $s1 = $ws.CreateShortcut(\"$desktop\Perpustakaan SBTH TK (Pusat).lnk\"); ^
-   $s1.TargetPath = \"$((Get-Location).Path)\JALANKAN_PERPUSTAKAAN_PUSAT.bat\"; ^
+   $s1.TargetPath = \"$((Get-Location).Path)\BUKA_APLIKASI_PERPUSTAKAAN_SBTH.vbs\"; ^
    $s1.WorkingDirectory = \"$((Get-Location).Path)\"; ^
    $s1.IconLocation = \"$((Get-Location).Path)\public\app_icon.ico,0\"; ^
-   $s1.Description = \"Aplikasi Perpustakaan SBTH Magelang - Mode Server Pusat\"; ^
+   $s1.Description = \"Aplikasi Perpustakaan SBTH - Langsung Web App Tanpa Jendela Hitam\"; ^
    $s1.Save(); ^
    $s2 = $ws.CreateShortcut(\"$desktop\Perpustakaan SBTH (PC Klien).lnk\"); ^
    $s2.TargetPath = \"$((Get-Location).Path)\BUKA_PERPUSTAKAAN_KLIEN.bat\"; ^

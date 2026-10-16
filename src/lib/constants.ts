@@ -680,6 +680,188 @@ export const INITIAL_BOOK_ITEMS: BookItem[] = [
     shelfLocation: 'Rak Pink F (Trilingual SBTH) - Baris 1',
     labelPrinted: false, // Belum dicetak label (untuk uji filter label)
   },
+  {
+    id: 'item-19',
+    bookId: 'b-08',
+    itemBarcode: 'SBTH-B-00119',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-05',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 48000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-20',
+    bookId: 'b-09',
+    itemBarcode: 'SBTH-B-00120',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-05',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-21',
+    bookId: 'b-10',
+    itemBarcode: 'SBTH-B-00121',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-05',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-22',
+    bookId: 'b-11',
+    itemBarcode: 'SBTH-B-00122',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-05',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-23',
+    bookId: 'b-12',
+    itemBarcode: 'SBTH-B-00123',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-05',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-24',
+    bookId: 'b-13',
+    itemBarcode: 'SBTH-B-00124',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-10',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 50000,
+    shelfLocation: 'Rak Biru C (Aktivitas & Membaca) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-25',
+    bookId: 'b-14',
+    itemBarcode: 'SBTH-B-00125',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-10',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Pink F (Trilingual SBTH) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-26',
+    bookId: 'b-15',
+    itemBarcode: 'SBTH-B-00126',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-10',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 50000,
+    shelfLocation: 'Rak Biru C (Aktivitas & Membaca) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-27',
+    bookId: 'b-16',
+    itemBarcode: 'SBTH-B-00127',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-12',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 65000,
+    shelfLocation: 'Rak Ungu E (Sains & Ensiklopedia) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-28',
+    bookId: 'b-17',
+    itemBarcode: 'SBTH-B-00128',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-12',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 45000,
+    shelfLocation: 'Rak Kuning B (Dongeng & Fabel) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-29',
+    bookId: 'b-18',
+    itemBarcode: 'SBTH-B-00129',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-15',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 48000,
+    shelfLocation: 'Rak Merah D (Karakter & Nilai) - Baris 1',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-30',
+    bookId: 'b-19',
+    itemBarcode: 'SBTH-B-00130',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-15',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 50000,
+    shelfLocation: 'Rak Kuning B (Dongeng & Fabel) - Baris 2',
+    labelPrinted: true,
+  },
+  {
+    id: 'item-31',
+    bookId: 'b-20',
+    itemBarcode: 'SBTH-B-00131',
+    copyNumber: 1,
+    status: 'AVAILABLE',
+    conditionNote: 'Kondisi prima siap dipinjam',
+    acquisitionDate: '2024-03-15',
+    source: 'BELI_SEKOLAH',
+    acquisitionSource: 'BELI_SEKOLAH',
+    priceValue: 65000,
+    shelfLocation: 'Rak Ungu E (Sains & Ensiklopedia) - Baris 2',
+    labelPrinted: true,
+  },
 ];
 
 
@@ -1166,6 +1348,21 @@ export const DEFAULT_LOAN_RULES: import('@/types').LoanRules = {
   qrisNmid: 'ID1020039482910',
   qrisImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020101021126610016ID.CO.QRIS.WWW01189360099900000000000215ID10200394829100303UMI51440014ID.GOV.PERPUS5204581253033605802ID5944PERPUSTAKAAN%20KB-TK%20BHAKTI%20TUNAS%20HARAPAN6008MAGELANG6105561236304',
   enableFinanceModule: true,
+  maxReservationsTotal: 2, // Maksimal kuota reservasi buku saat tidak sedang meminjam
+  maxReservationsWhenBorrowing: 1, // Maksimal kuota reservasi buku jika sedang ada pinjaman aktif
+};
+
+// Keyboard Shortcuts Configuration for Librarian Workspace
+export const DEFAULT_KEYBOARD_SHORTCUTS: import('@/types').KeyboardShortcutConfig = {
+  newLoan: 'Control+q',       // Ctrl + Q: Sirkulasi - Peminjaman Baru
+  returnBook: 'Control+t',    // Ctrl + T: Sirkulasi - Pengembalian Kilat (Aman dari close tab)
+  renewLoan: 'Control+e',     // Ctrl + E: Sirkulasi - Perpanjangan Pinjaman
+  overdueTab: 'Control+r',    // Ctrl + R: Sirkulasi - Tagihan Terlambat
+  booksTab: 'Control+b',      // Ctrl + B: Meja Koleksi Buku & Eksemplar
+  membersTab: 'Control+m',    // Ctrl + M: Data Anggota Siswa & Guru
+  opacTab: 'Control+k',       // Ctrl + K: Katalog Visual Anak (OPAC)
+  settingsModal: 'Control+p', // Ctrl + P: Pengaturan Sistem (Memerlukan Admin)
+  helpModal: 'F1',            // F1: Buka Bantuan Panduan Shortcut
 };
 
 // SLiMS 9 Bulian Pattern Generator Preset
@@ -1333,4 +1530,42 @@ Kirimkan pesan pengingat ke WA orang tua murid agar buku dapat dibawa kembali ke
   },
 ];
 
+// Konfigurasi Standar Pintasan Keyboard Mode Pustakawan
+export const DEFAULT_SHORTCUT_ITEMS: import('@/types').KeyboardShortcutItem[] = [
+  { id: 'sc-1', label: 'Peminjaman Baru', key: 'Q', ctrlKey: true, description: 'Buka Sirkulasi mode Peminjaman Baru', action: 'NAV_BORROW' },
+  { id: 'sc-2', label: 'Pengembalian Kilat', key: 'W', ctrlKey: true, description: 'Buka Sirkulasi mode Pengembalian Kilat 4-Langkah', action: 'NAV_RETURN' },
+  { id: 'sc-3', label: 'Koleksi & Eksemplar Buku', key: 'E', ctrlKey: true, description: 'Buka tab Koleksi & Eksemplar Buku', action: 'NAV_BOOKS' },
+  { id: 'sc-4', label: 'Perpanjangan Pinjaman', key: 'R', ctrlKey: true, description: 'Buka Sirkulasi mode Perpanjangan Buku', action: 'NAV_EXTEND' },
+  { id: 'sc-5', label: 'Kelola Anggota Siswa', key: 'M', ctrlKey: true, description: 'Buka tab Anggota & Data Siswa', action: 'NAV_MEMBERS' },
+  { id: 'sc-6', label: 'Katalog Visual Anak (OPAC)', key: 'K', ctrlKey: true, description: 'Buka Katalog Visual Anak (OPAC)', action: 'NAV_OPAC' },
+  { id: 'sc-7', label: 'Pengaturan Perpustakaan', key: 'P', ctrlKey: true, description: 'Buka Pengaturan Sistem Perpustakaan', action: 'OPEN_SETTINGS' },
+  { id: 'sc-8', label: 'Panduan Pintasan Keyboard', key: 'F1', ctrlKey: false, description: 'Tampilkan panduan tombol pintasan cepat', action: 'HELP_SHORTCUTS' },
+];
 
+// Standar Opsi Format Fisik Buku Anak (TK / PAUD / SD)
+export interface PhysicalFormatOption {
+  value: string;
+  label: string;
+  icon: string;
+  description?: string;
+}
+
+export const PHYSICAL_FORMAT_OPTIONS: PhysicalFormatOption[] = [
+  { value: 'Cerita Bergambar', label: 'Cerita Bergambar (Picture Book)', icon: '📘', description: 'Buku cerita penuh ilustrasi warna untuk anak' },
+  { value: 'Boardbook', label: 'Boardbook (Karton Tebal Balita)', icon: '📗', description: 'Halaman karton tebal, anti sobek, cocok untuk Toddler & Playgroup' },
+  { value: 'Hardcover', label: 'Hardcover (Jilid Tebal Kokoh)', icon: '📕', description: 'Sampul keras berkualitas tinggi, awet untuk perpustakaan' },
+  { value: 'Softcover / Paperback', label: 'Softcover / Paperback', icon: '📄', description: 'Sampul tipis/standar, fleksibel dan ringan dibaca' },
+  { value: 'Pop-Up / 3D', label: 'Pop-Up / 3D Interaktif', icon: '✨', description: 'Gambar timbul saat halaman dibuka' },
+  { value: 'Flip-Flap', label: 'Flip-Flap (Buka-Tutup Jendela)', icon: '📖', description: 'Halaman dengan jendela rahasia yang bisa diangkat/dibuka anak' },
+  { value: 'Buku Bantal / Kain', label: 'Buku Bantal / Kain (Cloth Book)', icon: '🧸', description: 'Buku berbahan kain lembut, aman untuk bayi dan toddler' },
+  { value: 'Buku Bersuara (Sound Book)', label: 'Buku Bersuara (Sound/Audio Book)', icon: '🔊', description: 'Dilengkapi tombol suara musik, hewan, atau cerita' },
+  { value: 'Buku Tekstur / Raba', label: 'Buku Tekstur / Raba (Touch & Feel)', icon: '🖐️', description: 'Memiliki tekstur berbulu, kasar, atau halus untuk sensori' },
+  { value: 'Komik Edukasi Anak', label: 'Komik Edukasi Anak', icon: '🎨', description: 'Cerita bergambar format panel komik ringan mendidik' },
+  { value: 'Ensiklopedia Bergambar', label: 'Ensiklopedia Bergambar Anak', icon: '🌍', description: 'Pengetahuan sains, hewan, dan dunia dengan foto menarik' },
+  { value: 'Buku Aktivitas & Mewarnai', label: 'Buku Aktivitas & Mewarnai', icon: '🖍️', description: 'Buku latihan tracing garis, mewarnai, dan maze' },
+  { value: 'Modul Belajar / LKS', label: 'Modul Belajar / Lembar Kerja (LKS)', icon: '📝', description: 'Materi tematik mingguan siswa KB-TK' },
+  { value: 'Flashcard Edukatif', label: 'Flashcard / Kartu Edukatif', icon: '🎴', description: 'Kartu alfabet, angka, hijaiyah, atau kosa kata' },
+  { value: 'Kamus Visual Bergambar', label: 'Kamus Visual Bergambar', icon: '📚', description: 'Kamus tematik 3 bahasa (ID - EN - Mandarin) dengan gambar' },
+  { value: 'Majalah / Buletin Anak', label: 'Majalah / Buletin Anak', icon: '📰', description: 'Edisi berkala bacaan anak dan sekolah' },
+  { value: 'E-Book / Interaktif Digital', label: 'E-Book / Interaktif Digital', icon: '💻', description: 'Materi digital audio-visual perpustakaan' },
+];

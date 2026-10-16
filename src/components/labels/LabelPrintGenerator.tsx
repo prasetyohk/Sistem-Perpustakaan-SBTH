@@ -40,8 +40,8 @@ export const LabelPrintGenerator: React.FC<LabelPrintGeneratorProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
-  const books = libraryStore.getBooks();
-  const allItems = libraryStore.getBookItems();
+  const books = useMemo(() => libraryStore.getBooks(), [isOpen, refreshKey]);
+  const allItems = useMemo(() => libraryStore.getBookItems(), [isOpen, refreshKey]);
 
   // Combine items with their parent book metadata
   const enrichedItems = useMemo(() => {
@@ -79,20 +79,49 @@ export const LabelPrintGenerator: React.FC<LabelPrintGeneratorProps> = ({
     });
   }, [enrichedItems, statusFilter, searchQuery]);
 
-  // If preSelectedBarcodes changed, sync selection
+  // Synchronize selection ONLY when modal opens or when preSelectedBarcodes prop actually changes
+  const prevOpenRef = React.useRef(false);
+  const prevBarcodesKeyRef = React.useRef<string>('');
+
   React.useEffect(() => {
-    if (preSelectedBarcodes.length > 0) {
-      setSelectedBarcodes(preSelectedBarcodes);
-    } else if (selectedBarcodes.length === 0 && enrichedItems.length > 0) {
-      const unprinted = enrichedItems.filter((ei) => !ei.item.labelPrinted);
-      if (unprinted.length > 0) {
-        setSelectedBarcodes(unprinted.slice(0, 12).map((ei) => ei.item.itemBarcode));
-        setStatusFilter('UNPRINTED');
+    if (!isOpen) {
+      prevOpenRef.current = false;
+      return;
+    }
+
+    const currentKey = (preSelectedBarcodes || []).join(',');
+    const isFirstOpen = !prevOpenRef.current;
+    const barcodesChanged = currentKey !== prevBarcodesKeyRef.current;
+
+    prevOpenRef.current = true;
+
+    if (isFirstOpen || barcodesChanged) {
+      prevBarcodesKeyRef.current = currentKey;
+
+      if (preSelectedBarcodes && preSelectedBarcodes.length > 0) {
+        setSelectedBarcodes(preSelectedBarcodes);
+        const hasUnprinted = enrichedItems.some(
+          (ei) => preSelectedBarcodes.includes(ei.item.itemBarcode) && !ei.item.labelPrinted
+        );
+        if (hasUnprinted) {
+          setStatusFilter('UNPRINTED');
+        } else {
+          setStatusFilter('ALL');
+        }
       } else {
-        setSelectedBarcodes(enrichedItems.slice(-6).map((ei) => ei.item.itemBarcode));
+        const unprinted = enrichedItems
+          .filter((ei) => !ei.item.labelPrinted)
+          .map((ei) => ei.item.itemBarcode);
+        if (unprinted.length > 0) {
+          setSelectedBarcodes(unprinted.slice(0, 12));
+          setStatusFilter('UNPRINTED');
+        } else {
+          setSelectedBarcodes(enrichedItems.slice(-12).map((ei) => ei.item.itemBarcode));
+          setStatusFilter('ALL');
+        }
       }
     }
-  }, [preSelectedBarcodes, enrichedItems]);
+  }, [isOpen, preSelectedBarcodes, enrichedItems]);
 
   const toggleSelectBarcode = (barcode: string) => {
     setSelectedBarcodes((prev) =>
@@ -101,7 +130,11 @@ export const LabelPrintGenerator: React.FC<LabelPrintGeneratorProps> = ({
   };
 
   const selectAll = () => {
-    setSelectedBarcodes(filteredItems.map((ei) => ei.item.itemBarcode));
+    if (filteredItems.length > 0) {
+      setSelectedBarcodes(filteredItems.map((ei) => ei.item.itemBarcode));
+    } else {
+      setSelectedBarcodes(enrichedItems.map((ei) => ei.item.itemBarcode));
+    }
   };
 
   const selectUnprintedOnly = () => {
@@ -272,9 +305,9 @@ export const LabelPrintGenerator: React.FC<LabelPrintGeneratorProps> = ({
                 <button
                   type="button"
                   onClick={selectAll}
-                  className="text-[11px] text-blue-600 hover:underline font-medium"
+                  className="text-[11px] text-blue-600 hover:underline font-semibold"
                 >
-                  Pilih Semua
+                  Pilih Semua ({statusFilter !== 'ALL' ? filteredItems.length : enrichedItems.length})
                 </button>
                 <span className="text-slate-300">|</span>
                 <button

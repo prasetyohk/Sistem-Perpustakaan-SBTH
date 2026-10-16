@@ -44,8 +44,28 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
   const [search, setSearch] = useState<string>('');
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | GradeLevel | 'CLASSROOM'>('ALL');
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
+  const [selectedClassGroup, setSelectedClassGroup] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'GRADUATED'>('ALL');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('GRID');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+
+  // Restore saved view mode
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedView = localStorage.getItem('sbth_members_view_mode') as any;
+      if (savedView && ['GRID', 'TABLE'].includes(savedView)) {
+        setViewMode(savedView);
+      }
+    }
+  }, []);
+
+  // Persist view mode
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sbth_members_view_mode', viewMode);
+    }
+  }, [viewMode]);
   const [isTransitionModalOpen, setIsTransitionModalOpen] = useState<boolean>(false);
   const [selectedMemberForCard, setSelectedMemberForCard] = useState<Member | null>(null);
   const [selectedMemberForLoans, setSelectedMemberForLoans] = useState<Member | null>(null);
@@ -80,15 +100,37 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
     new Set(members.map((m) => m.academicYear).filter(Boolean))
   ) as string[];
 
+  // Extract available class groups for class filter dropdown
+  const availableClasses = Array.from(
+    new Set(members.map((m) => m.classGroup).filter(Boolean))
+  ).sort() as string[];
+
+  // Alumni members for quick bulk selection
+  const alumniMembers = members.filter(
+    (m) => m.status === 'GRADUATED' || m.gradeLevel === 'ALUMNI'
+  );
+
   const filteredMembers = members.filter((m) => {
     if (selectedFilter !== 'ALL') {
       if (selectedFilter === 'CLASSROOM') {
         if (m.type !== 'CLASSROOM') return false;
       } else if (selectedFilter === 'TEACHER') {
         if (m.type !== 'TEACHER') return false;
+      } else if (selectedFilter === 'ALUMNI') {
+        if (m.status !== 'GRADUATED' && m.gradeLevel !== 'ALUMNI') return false;
       } else {
         if (m.gradeLevel !== selectedFilter) return false;
       }
+    }
+
+    if (statusFilter !== 'ALL') {
+      const isAlumni = m.status === 'GRADUATED' || m.gradeLevel === 'ALUMNI';
+      if (statusFilter === 'GRADUATED' && !isAlumni) return false;
+      if (statusFilter === 'ACTIVE' && isAlumni) return false;
+    }
+
+    if (selectedClassGroup !== 'ALL' && m.classGroup !== selectedClassGroup) {
+      return false;
     }
 
     if (selectedYear !== 'ALL' && m.academicYear !== selectedYear) {
@@ -107,6 +149,116 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
     }
     return true;
   });
+
+  const isAllVisibleSelected =
+    filteredMembers.length > 0 &&
+    filteredMembers.every((m) => selectedMemberIds.includes(m.id));
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    if (isAllVisibleSelected) {
+      const visibleIds = new Set(filteredMembers.map((m) => m.id));
+      setSelectedMemberIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+    } else {
+      const visibleIds = filteredMembers.map((m) => m.id);
+      setSelectedMemberIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleSelectAllAlumni = () => {
+    const alumniIds = alumniMembers.map((m) => m.id);
+    setSelectedMemberIds(alumniIds);
+    setSelectedFilter('ALUMNI' as any);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedMemberIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedMemberIds.length === 0) return;
+
+    const selectedMembers = members.filter((m) => selectedMemberIds.includes(m.id));
+    const membersWithLoans = selectedMembers.filter((m) => getActiveLoansCount(m.id) > 0);
+
+    if (membersWithLoans.length > 0) {
+      alert(
+        `⚠️ PERINGATAN: Tidak dapat menghapus massal!\n\n` +
+        `Terdapat ${membersWithLoans.length} siswa yang masih memiliki pinjaman buku aktif:\n` +
+        membersWithLoans.slice(0, 5).map((m) => `• ${m.name} (${getActiveLoansCount(m.id)} buku)`).join('\n') +
+        (membersWithLoans.length > 5 ? `\n...dan ${membersWithLoans.length - 5} lainnya` : '') +
+        `\n\nSilakan selesaikan pengembalian buku di Sirkulasi terlebih dahulu.`
+      );
+      return;
+    }
+
+    const count = selectedMemberIds.length;
+    const alumniCount = selectedMembers.filter((m) => m.status === 'GRADUATED' || m.gradeLevel === 'ALUMNI').length;
+
+    if (
+      !confirm(
+        `HAPUS MASSAL ANGGOTA PERPUSTAKAAN:\n\n` +
+        `Apakah Anda yakin ingin menghapus permanen ${count} data anggota yang dicentang?\n` +
+        `(${alumniCount} diantaranya berstatus alumni / lulus).\n\n` +
+        `Tindakan ini permanen dan akan membersihkan basis data siswa untuk tahun ajaran baru.`
+      )
+    ) {
+      return;
+    }
+
+    libraryStore.deleteMembers(selectedMemberIds);
+    soundFx.playScanBeep();
+    setSelectedMemberIds([]);
+    setRefreshTrigger((prev) => prev + 1);
+    if (onRefresh) onRefresh();
+    alert(`✓ Berhasil menghapus ${count} data anggota.`);
+  };
+
+  const handleGraduateTKBQuick = () => {
+    const tkbStudents = members.filter(
+      (m) => m.type === 'STUDENT' && m.gradeLevel === 'TK_B' && m.status !== 'GRADUATED'
+    );
+    if (tkbStudents.length === 0) {
+      alert('Tidak ada siswa aktif di jenjang TK-B untuk diluluskan saat ini.');
+      return;
+    }
+
+    if (
+      !confirm(
+        `LULUSKAN SEMUA SISWA TK-B KE ALUMNI:\n\n` +
+        `Ditemukan ${tkbStudents.length} siswa TK-B aktif.\n` +
+        `Status mereka akan diubah menjadi "Alumni (Lulus)" sehingga dapat dipisahkan atau dihapus massal pada tahun ajaran baru.\n\n` +
+        `Lanjutkan proses ini sekarang?`
+      )
+    ) {
+      return;
+    }
+
+    const updated = members.map((m) => {
+      if (m.type === 'STUDENT' && m.gradeLevel === 'TK_B' && m.status !== 'GRADUATED') {
+        return {
+          ...m,
+          gradeLevel: 'ALUMNI' as const,
+          status: 'GRADUATED' as const,
+          classGroup: `Alumni TK-B (${m.academicYear || 'Lulus'})`,
+          maxLoanLimit: 0,
+        };
+      }
+      return m;
+    });
+
+    libraryStore.saveMembers(updated);
+    soundFx.playSuccessChime();
+    setSelectedFilter('ALUMNI' as any);
+    setRefreshTrigger((prev) => prev + 1);
+    if (onRefresh) onRefresh();
+    alert(`✓ Sukses! ${tkbStudents.length} siswa TK-B telah dialihkan ke Arsip Alumni.`);
+  };
 
   const getActiveLoansCount = (memberId: string) => {
     const memberLoans = allLoans.filter((l) => l.memberId === memberId && (l.status === 'ACTIVE' || l.status === 'OVERDUE'));
@@ -243,6 +395,16 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
           <>
             <button
               type="button"
+              onClick={handleGraduateTKBQuick}
+              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-surface border border-border hover:bg-surface-2 text-text font-semibold text-xs flex items-center justify-center gap-2 transition"
+              title="Luluskan seluruh siswa TK-B aktif menjadi Alumni dalam 1 klik saat akhir tahun ajaran"
+            >
+              <Award className="h-4 w-4 text-amber-500" />
+              <span>Luluskan TK-B</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setTransitionResult(null);
                 setIsTransitionModalOpen(true);
@@ -268,7 +430,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
 
       {/* 2. Filter and Search Bar */}
       <div className="rounded-2xl bg-surface border border-border p-3.5 space-y-3 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Search box */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-text-muted" />
@@ -281,7 +443,38 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Class / Rombel Filter */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
+              <span className="text-text-muted font-medium">Kelas:</span>
+              <select
+                value={selectedClassGroup}
+                onChange={(e) => setSelectedClassGroup(e.target.value)}
+                className="bg-transparent border-none outline-hidden text-xs text-text cursor-pointer font-semibold max-w-[140px] truncate"
+              >
+                <option value="ALL" className="bg-surface text-text">Semua Kelas</option>
+                {availableClasses.map((cls) => (
+                  <option key={cls} value={cls} className="bg-surface text-text">
+                    {cls}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
+              <span className="text-text-muted font-medium">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="bg-transparent border-none outline-hidden text-xs text-text cursor-pointer font-semibold"
+              >
+                <option value="ALL" className="bg-surface text-text">Semua Status</option>
+                <option value="ACTIVE" className="bg-surface text-text">Siswa Aktif</option>
+                <option value="GRADUATED" className="bg-surface text-text">Alumni / Lulus</option>
+              </select>
+            </div>
+
             {/* Academic Year Filter */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-2 border border-border text-xs">
               <span className="text-text-muted font-medium">Angkatan:</span>
@@ -357,19 +550,85 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
         </div>
       </div>
 
+      {/* 2.5 Bulk Selection Bar */}
+      <div className="rounded-2xl bg-surface border border-border p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer select-none font-semibold text-text">
+            <input
+              type="checkbox"
+              checked={isAllVisibleSelected}
+              onChange={handleSelectAllVisible}
+              className="h-4 w-4 rounded-md border-border text-amber-500 focus:ring-amber-500 bg-surface-2 cursor-pointer"
+            />
+            <span>Pilih Semua ({filteredMembers.length} Anggota)</span>
+          </label>
+
+          {alumniMembers.length > 0 && (
+            <button
+              type="button"
+              onClick={handleSelectAllAlumni}
+              className="px-2.5 py-1.5 rounded-xl bg-surface-2 hover:bg-surface border border-border text-text font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              title="Centang otomatis semua data siswa yang sudah alumni / lulus"
+            >
+              <GraduationCap className="h-3.5 w-3.5 text-amber-500" />
+              <span>Pilih Semua Alumni ({alumniMembers.length})</span>
+            </button>
+          )}
+
+          {selectedMemberIds.length > 0 && (
+            <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-500 font-bold text-xs border border-amber-500/20">
+              {selectedMemberIds.length} Siswa Terpilih
+            </span>
+          )}
+        </div>
+
+        {selectedMemberIds.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="px-3 py-1.5 rounded-xl text-text-muted hover:text-text hover:bg-surface-2 transition text-xs font-semibold cursor-pointer"
+            >
+              Batal Pilih
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Hapus Massal ({selectedMemberIds.length})</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 3. Member Presentation: Grid Mode or Table Mode */}
       {viewMode === 'GRID' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredMembers.map((member) => {
             const activeLoansCount = getActiveLoansCount(member.id);
             const loanPct = Math.min(100, Math.round((activeLoansCount / member.maxLoanLimit) * 100));
+            const isSelected = selectedMemberIds.includes(member.id);
 
             return (
               <div
                 key={member.id}
-                className="rounded-2xl bg-surface border border-border p-4 sm:p-5 shadow-xs hover:border-border/80 transition flex flex-col justify-between space-y-3"
+                className={`rounded-2xl bg-surface border p-4 sm:p-5 shadow-xs transition flex flex-col justify-between space-y-3 relative ${
+                  isSelected
+                    ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-500/[0.02]'
+                    : 'border-border hover:border-border/80'
+                }`}
               >
-                <div className="flex items-start gap-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelect(member.id)}
+                      className="h-4 w-4 rounded-md border-border text-amber-500 focus:ring-amber-500 bg-surface-2 cursor-pointer"
+                    />
+                  </div>
                   <Avatar
                     name={member.name}
                     src={member.photoUrl}
@@ -500,6 +759,14 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
             <table className="w-full text-left text-xs">
               <thead className="bg-surface-2 text-text-muted border-b border-border sticky top-0 font-semibold">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 rounded-md border-border text-amber-500 focus:ring-amber-500 bg-surface-2 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Anggota</th>
                   <th className="py-3 px-4">Kode Barcode</th>
                   <th className="py-3 px-4">Kelas & Angkatan</th>
@@ -511,9 +778,23 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({ onRefresh })
               <tbody className="divide-y divide-border">
                 {filteredMembers.map((member) => {
                   const activeLoansCount = getActiveLoansCount(member.id);
+                  const isSelected = selectedMemberIds.includes(member.id);
 
                   return (
-                    <tr key={member.id} className="hover:bg-surface-2/60 transition">
+                    <tr
+                      key={member.id}
+                      className={`transition ${
+                        isSelected ? 'bg-amber-500/10' : 'hover:bg-surface-2/60'
+                      }`}
+                    >
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(member.id)}
+                          className="h-4 w-4 rounded-md border-border text-amber-500 focus:ring-amber-500 bg-surface-2 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
                           <Avatar

@@ -1,0 +1,237 @@
+================================================================================
+PANDUAN LENGKAP DEPLOY ONLINE - SISTEM INFORMASI PERPUSTAKAAN SBTH TK
+================================================================================
+Target Server : VPS Linux (Ubuntu 22.04 LTS / Ubuntu 24.04 LTS)
+Stack         : Next.js 16 + React 19 + Node.js LTS + PM2 + Nginx + Certbot SSL
+Tanggal       : Oktober 2026
+Status        : Siap Produksi (Production-Ready)
+================================================================================
+
+DAFTAR ISI:
+1. Spesifikasi Server & Persiapan Domain
+2. Update Sistem & Konfigurasi Firewall (UFW)
+3. Instalasi Node.js LTS, Git, & PM2
+4. Mengunggah / Clone Source Code ke Server
+5. Instalasi Dependensi & Build Next.js
+6. Konfigurasi & Menjalankan PM2 Service
+7. Konfigurasi Nginx Reverse Proxy
+8. Pemasangan Sertifikat SSL HTTPS Gratis (Certbot)
+9. Backup Rutin & Keamanan
+10. Perintah Pemeliharaan Harian (Cheat Sheet)
+
+--------------------------------------------------------------------------------
+1. SPESIFIKASI SERVER & PERSIAPAN DOMAIN
+--------------------------------------------------------------------------------
+Rekomendasi Spesifikasi VPS:
+- OS           : Ubuntu 22.04 LTS atau 24.04 LTS (64-bit)
+- Processor    : Minimal 1 vCPU (Disarankan 2 vCPU)
+- RAM          : Minimal 1 GB (Disarankan 2 GB, atau aktifkan 2 GB Swap file)
+- Storage      : Minimal 20 GB SSD
+- Provider     : DomaiNesia, IDCloudHost, Niagahoster, Biznet, DigitalOcean, Hetzner, dll.
+
+Persiapan Domain / Subdomain:
+1. Buat DNS Record tipe A di dashboard domain Anda:
+   - Host / Name : perpustakaan (atau @ jika domain utama)
+   - Type        : A
+   - Value / IP  : [IP_PUBLIC_VPS_ANDA] (contoh: 103.123.45.67)
+   - TTL         : Automatic atau 3600
+2. Tunggu propagasi DNS (biasanya 5 - 30 menit). Cek dengan: ping perpustakaan.sekolah.sch.id
+
+--------------------------------------------------------------------------------
+2. UPDATE SISTEM & KONFIGURASI FIREWALL (UFW)
+--------------------------------------------------------------------------------
+Login ke VPS via SSH melalui terminal atau PuTTY:
+  ssh root@[IP_PUBLIC_VPS_ANDA]
+
+Jalankan update sistem:
+  sudo apt update && sudo apt upgrade -y
+  sudo apt install -y curl wget git ufw nano unzip htop
+
+Konfigurasi Swap File (Sangat penting jika RAM 1 GB agar build tidak kehabisan memori):
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+Konfigurasi Firewall (UFW):
+  sudo ufw default deny incoming
+  sudo ufw default allow outgoing
+  sudo ufw allow ssh
+  sudo ufw allow 80/tcp
+  sudo ufw allow 443/tcp
+  sudo ufw enable
+  (Ketik 'y' lalu tekan ENTER saat diminta konfirmasi)
+  sudo ufw status
+
+--------------------------------------------------------------------------------
+3. INSTALASI NODE.JS LTS, GIT, & PM2
+--------------------------------------------------------------------------------
+Instal Node.js versi LTS (v20.x atau v22.x) melalui NodeSource:
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt install -y nodejs
+
+Verifikasi versi:
+  node -v   # Minimal v20.x.x
+  npm -v
+
+Instal PM2 (Process Manager kelas produksi untuk Node.js):
+  sudo npm install -g pm2
+
+--------------------------------------------------------------------------------
+4. MENGUNGGAH / CLONE SOURCE CODE KE SERVER
+--------------------------------------------------------------------------------
+Buat direktori untuk aplikasi:
+  sudo mkdir -p /var/www/perpustakaan-sbth
+  sudo chown -R $USER:$USER /var/www/perpustakaan-sbth
+  cd /var/www/perpustakaan-sbth
+
+Opsi A: Clone langsung dari GitHub:
+  git clone https://github.com/prasetyohk/Sistem-Perpustakaan-SBTH.git .
+
+Opsi B: Upload zip dari komputer lokal via SCP / FileZilla:
+  scp file_project.zip user@[IP_PUBLIC_VPS]:/var/www/perpustakaan-sbth/
+  cd /var/www/perpustakaan-sbth
+  unzip file_project.zip
+
+--------------------------------------------------------------------------------
+5. INSTALASI DEPENDENSI & BUILD NEXT.JS
+--------------------------------------------------------------------------------
+Di dalam folder `/var/www/perpustakaan-sbth`:
+  npm install
+
+Buat file environment (.env.local jika diperlukan):
+  nano .env.local
+  (Isi konfigurasi jika ada, misalnya PORT=3000, lalu simpan dengan Ctrl+O, Enter, Ctrl+X)
+
+Jalankan kompilasi produksi:
+  npm run build
+
+Pastikan proses build selesai dengan output sukses:
+"✓ Compiled successfully"
+"✓ Collecting page data"
+"✓ Generating static pages"
+
+--------------------------------------------------------------------------------
+6. KONFIGURASI & MENJALANKAN PM2 SERVICE
+--------------------------------------------------------------------------------
+Jalankan aplikasi Next.js menggunakan PM2:
+  pm2 start npm --name "perpustakaan-sbth" -- start -- -p 3000
+
+Cek status proses:
+  pm2 status
+  pm2 logs perpustakaan-sbth --lines 20
+
+Simpan daftar proses PM2 agar otomatis berjalan saat VPS restart (Autostart):
+  pm2 save
+  pm2 startup
+  (Salin dan jalankan perintah `sudo env PATH=...` yang dimunculkan oleh terminal)
+
+--------------------------------------------------------------------------------
+7. KONFIGURASI NGINX REVERSE PROXY
+--------------------------------------------------------------------------------
+Instal Nginx web server:
+  sudo apt install -y nginx
+
+Buat konfigurasi virtual host Nginx untuk perpustakaan:
+  sudo nano /etc/nginx/sites-available/perpustakaan-sbth
+
+Salin dan tempel konfigurasi berikut (ganti nama domain dengan domain Anda):
+
+server {
+    listen 80;
+    server_name perpustakaan.sekolah.sch.id;
+
+    client_max_body_size 20M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Optimasi Caching untuk file statis Next.js
+    location /_next/static {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_cache_valid 200 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+}
+
+Aktifkan konfigurasi dan uji sintaks:
+  sudo ln -s /etc/nginx/sites-available/perpustakaan-sbth /etc/nginx/sites-enabled/
+  sudo nginx -t
+
+Jika output "syntax is ok" dan "test is successful", reload Nginx:
+  sudo systemctl reload nginx
+
+--------------------------------------------------------------------------------
+8. PEMASANGAN SERTIFIKAT SSL HTTPS GRATIS (CERTBOT LET'S ENCRYPT)
+--------------------------------------------------------------------------------
+Instal Certbot untuk Nginx:
+  sudo apt install -y certbot python3-certbot-nginx
+
+Terbitkan sertifikat SSL otomatis:
+  sudo certbot --nginx -d perpustakaan.sekolah.sch.id
+
+Ikuti petunjuk di layar:
+1. Masukkan alamat email admin perpustakaan / sekolah.
+2. Ketik 'Y' untuk menyetujui Ketentuan Layanan Let's Encrypt.
+3. Pilih opsi 'Redirect HTTP to HTTPS' (Opsi 2 jika ditanya).
+
+Certbot akan otomatis memperbarui konfigurasi Nginx menjadi HTTPS port 443!
+Uji auto-renewal sertifikat (diperbarui otomatis setiap 90 hari):
+  sudo certbot renew --dry-run
+
+Sekarang buka browser Anda dan akses:
+  https://perpustakaan.sekolah.sch.id
+Aplikasi siap diakses oleh seluruh guru, staf, pustakawan, dan wali murid dari mana saja!
+
+--------------------------------------------------------------------------------
+9. BACKUP RUTIN & KEAMANAN
+--------------------------------------------------------------------------------
+1. Backup Data Perpustakaan:
+   - Data inventaris buku, peminjaman, anggota, dan audit log tersimpan secara aman.
+   - Pustakawan dapat mengunduh cadangan sewaktu-waktu melalui menu:
+     Pengaturan Perpustakaan -> "Export Data JSON / Excel".
+   - Simpan file cadangan tersebut di Google Drive perpustakaan setiap akhir pekan.
+
+2. Memulai Data Riil (Membersihkan Data Demo Mockup):
+   - Jika aplikasi pertama kali digunakan di sekolah riil, buka menu Pengaturan Perpustakaan.
+   - Klik tombol merah: "Reset Data Mockup / Percobaan (Mulai Data Riil)".
+   - Masukkan PIN Pengawas/Admin (Default: 8888).
+   - Seluruh data buku dummy akan terhapus bersih, dan nomor barcode akan siap
+     dimulai dari nomor inventaris sekolah yang sesungguhnya.
+
+--------------------------------------------------------------------------------
+10. PERINTAH PEMELIHARAAN HARIAN (CHEAT SHEET)
+--------------------------------------------------------------------------------
+Melihat log sistem aplikasi secara live:
+  pm2 logs perpustakaan-sbth
+
+Restart aplikasi setelah update kode baru:
+  cd /var/www/perpustakaan-sbth
+  git pull origin main
+  npm install
+  npm run build
+  pm2 restart perpustakaan-sbth
+
+Melihat status pemakaian RAM & CPU:
+  pm2 monit
+  htop
+
+Restart web server Nginx:
+  sudo systemctl restart nginx
+
+Melihat log error Nginx jika web tidak bisa diakses:
+  sudo tail -f /var/log/nginx/error.log
+
+================================================================================
+DOKUMENTASI INI DIBUAT UNTUK PERPUSTAKAAN DIGITAL TAMAN KANAK-KANAK SBTH
+================================================================================
